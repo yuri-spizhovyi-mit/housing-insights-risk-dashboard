@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info:
+  title: Housing Insights API
+  version: 0.1.0
+paths:
+  /cities:
+    get:
+      summary: List supported cities
+      responses: { '200': { description: OK } }
+  /forecast:
+    get:
+      summary: Forecast for a city
+      parameters:
+        - in: query
+          name: city
+          required: true
+          schema: { type: string }
+      responses: { '200': { description: OK } }
+  /risk:
+    get:
+      summary: Risk indicators
+      parameters:
+        - in: query
+          name: city
+          required: true
+          schema: { type: string }
+      responses: { '200': { description: OK } }
+  /report.pdf:
+    get:
+      summary: PDF download for a city
+      parameters:
+        - in: query
+          name: city
+          required: true
+          schema: { type: string }
+      responses: { '200': { description: OK } }

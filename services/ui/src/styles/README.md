@@ -1,0 +1,1 @@
+Global and component styles.
