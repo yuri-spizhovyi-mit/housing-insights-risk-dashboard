@@ -1,3 +1,15 @@
 # UI (React + TypeScript)
 
-Runs on Vite. Consumes the API and shows charts, gauges, and PDF download.
+Frontend dashboard displaying:
+
+- Charts (price, rent forecasts)
+- Risk gauges
+- Sentiment indicators
+- PDF download button
+
+## Run locally
+
+```bash
+npm install
+npm run dev
+```
