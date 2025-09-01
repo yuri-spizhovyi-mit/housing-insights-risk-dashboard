@@ -1,0 +1,238 @@
+openapi: 3.0.3
+info:
+  title: Housing Insights API
+  version: 0.1.0
+  description: >
+    Backend for Housing Insights + Risk Dashboard. Serves city lists, simple
+    forecasts, risk indicators, and a generated PDF report.
+
+servers:
+  - url: http://localhost:8080
+    description: Local dev
+
+
+# == Temporary == #
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+# == - == #
+
+tags:
+  - name: Cities
+  - name: Forecast
+  - name: Risk
+  - name: Reports
+  - name: System
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            text/plain:
+              schema: { type: string, example: OK }
+
+  /cities:
+    get:
+      tags: [Cities]
+      summary: List supported cities
+      responses:
+        '200':
+          description: Array of supported cities
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/City' }
+              examples:
+                sample:
+                  value:
+                    - code: "kelowna-bc"
+                      name: "Kelowna"
+                      province: "BC"
+                      country: "CA"
+                    - code: "toronto-on"
+                      name: "Toronto"
+                      province: "ON"
+                      country: "CA"
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /forecast:
+    get:
+      tags: [Forecast]
+      summary: Forecast for a city
+      parameters:
+        - $ref: '#/components/parameters/CityParam'
+      responses:
+        '200':
+          description: Simple daily forecast for prices/rent index
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  city: { $ref: '#/components/schemas/CityRef' }
+                  horizonDays: { type: integer, example: 30 }
+                  series:
+                    type: array
+                    items: { $ref: '#/components/schemas/ForecastPoint' }
+              examples:
+                sample:
+                  value:
+                    city: { code: "kelowna-bc" }
+                    horizonDays: 30
+                    series:
+                      - date: "2025-09-01"
+                        priceIndex: 104.2
+                        rentIndex: 101.1
+                      - date: "2025-09-02"
+                        priceIndex: 104.3
+                        rentIndex: 101.2
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /risk:
+    get:
+      tags: [Risk]
+      summary: Risk indicators
+      parameters:
+        - $ref: '#/components/parameters/CityParam'
+      responses:
+        '200':
+          description: Key risk indicators for a city
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiskIndicators' }
+              examples:
+                sample:
+                  value:
+                    city: { code: "kelowna-bc" }
+                    score: 0.63
+                    bands: { liquidity: "medium", volatility: "high", affordability: "low" }
+                    metrics:
+                      monthsOfInventory: 3.2
+                      priceYoY: -0.7
+                      newListingsYoY: 4.1
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /report.pdf:
+    get:
+      tags: [Reports]
+      summary: PDF download for a city
+      parameters:
+        - $ref: '#/components/parameters/CityParam'
+      responses:
+        '200':
+          description: City report as PDF
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: Suggested filename
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+components:
+  parameters:
+    CityParam:
+      name: city
+      in: query
+      required: true
+      description: City code (slug), e.g., `kelowna-bc`
+      schema:
+        type: string
+        minLength: 2
+        example: kelowna-bc
+
+  responses:
+    BadRequest:
+      description: Invalid input parameters
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            missingCity:
+              value: { status: 400, error: "Bad Request", message: "Parameter 'city' is required" }
+    NotFound:
+      description: Resource not found for given city
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            unknownCity:
+              value: { status: 404, error: "Not Found", message: "City 'xyz' is not supported" }
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    City:
+      type: object
+      properties:
+        code: { type: string, example: "kelowna-bc" }
+        name: { type: string, example: "Kelowna" }
+        province: { type: string, example: "BC" }
+        country: { type: string, example: "CA" }
+      required: [code, name]
+
+    CityRef:
+      type: object
+      properties:
+        code: { type: string }
+      required: [code]
+
+    ForecastPoint:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        priceIndex: { type: number }
+        rentIndex: { type: number }
+      required: [date]
+
+    RiskIndicators:
+      type: object
+      properties:
+        city: { $ref: '#/components/schemas/CityRef' }
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Aggregate risk score (0–1)
+        bands:
+          type: object
+          properties:
+            liquidity: { type: string, example: "medium" }
+            volatility: { type: string, example: "high" }
+            affordability: { type: string, example: "low" }
+        metrics:
+          type: object
+          properties:
+            monthsOfInventory: { type: number }
+            priceYoY: { type: number, description: "Year-over-year price change (%)" }
+            newListingsYoY: { type: number, description: "Year-over-year change in new listings (%)" }
+      required: [city, score]
+
+    Error:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time, nullable: true }
+        status: { type: integer, example: 400 }
+        error: { type: string, example: "Bad Request" }
+        message: { type: string, example: "Parameter 'city' is required" }
+        path: { type: string, example: "/forecast" }
