@@ -11,8 +11,17 @@ servers:
     description: Local dev
 
 
+
 # == Temporary == #
 spring:
+#  datasource:
+#    url:jdbc:postgresql://localhost:13000/housing-app
+#    driver-class-name:org.postgresql.Driver
+#    username:postgres
+#    password:Max@132006
+#  jpa:
+#    ddl-auto:update
+#    show_sql:true
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
