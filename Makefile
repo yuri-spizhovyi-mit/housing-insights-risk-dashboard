@@ -16,6 +16,7 @@ format:
 	(cd ml && ruff check --fix . && black .) || true
 	(cd services/ui && npm run lint:fix) || true
 
+# --- ETL convenience targets ---
 etl: etl-crea etl-cmhc etl-statcan etl-boc
 
 etl-crea:
@@ -29,3 +30,4 @@ etl-statcan:
 
 etl-boc:
 \tcd ml && python -m pipelines.daily_ingest --source boc --date today
+
