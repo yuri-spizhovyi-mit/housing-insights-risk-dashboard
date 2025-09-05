@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 import os
 import pandas as pd
 from sqlalchemy import create_engine
@@ -28,8 +27,7 @@ class Context:
         return create_engine(url, future=True)
 
 
-def write_df(df: pd.DataFrame, table: str, ctx: Context, if_exists="append"):
-    # enforce snake_case columns and dtypes
+def write_df(df: pd.DataFrame, table: str, ctx: Context, if_exists: str = "append"):
     df.columns = [c.lower() for c in df.columns]
     with ctx.engine.begin() as conn:
         df.to_sql(table, conn, if_exists=if_exists, index=False)
