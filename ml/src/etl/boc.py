@@ -1,23 +1,34 @@
-import io
 import pandas as pd
 import requests
-from .base import Context, write_df
+from .base import Context, write_df, put_raw_bytes
 
-# NOTE: Replace with actual Bank of Canada CSV endpoint(s)
-BOC_URL = "https://example.com/boc_rates.csv"
+
+def _get_series(series: str, start: str = "2000-01-01") -> pd.DataFrame:
+    url = f"https://www.bankofcanada.ca/valet/observations/{series}/json?start_date={start}"
+    r = requests.get(url, timeout=60)
+    r.raise_for_status()
+    j = r.json()
+    obs = j["observations"]
+    records = []
+    for o in obs:
+        d = o["d"]
+        v = o.get(series, {}).get("v")
+        if v is not None:
+            records.append({"date": d, "value": float(v)})
+    return pd.DataFrame.from_records(records)
 
 
 def run(ctx: Context):
-    r = requests.get(BOC_URL, timeout=60)
-    r.raise_for_status()
-    raw_df = pd.read_csv(io.BytesIO(r.content))
-
-    tidy = raw_df.rename(
-        columns={"Date": "date", "Series": "metric", "Value": "value"}
-    ).assign(source="BoC", city=None)
-    tidy["date"] = pd.to_datetime(tidy["date"]).dt.date
-    tidy = tidy[["city", "date", "metric", "value", "source"]].dropna(
-        subset=["date", "metric", "value"]
+    # Target for the overnight rate (policy rate)
+    df = _get_series("V39079", "2000-01-01")  # monthly series
+    put_raw_bytes(
+        ctx,
+        f"{ctx.s3_raw_prefix}/boc/{ctx.run_date.isoformat()}/V39079.json",
+        df.to_json(orient="records").encode(),
+        "application/json",
     )
 
-    write_df(tidy, "metrics", ctx)
+    df["date"] = pd.to_datetime(df["date"]).dt.to_period("M").dt.to_timestamp()
+    df = df.assign(city="Canada", metric="policy_rate_overnight", source="BoC")
+    out = df[["city", "date", "metric", "value", "source"]]
+    write_df(out, "metrics", ctx)
