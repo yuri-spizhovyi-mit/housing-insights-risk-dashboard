@@ -5,6 +5,64 @@ import os, io, re, zipfile, json, pathlib
 import pandas as pd
 from sqlalchemy import create_engine
 import boto3
+from typing import Optional, Dict
+from sqlalchemy import text
+from psycopg2.extras import (
+    execute_values,
+)  # requires psycopg2-binary in requirements.txt
+from pathlib import Path
+from dotenv import load_dotenv, find_dotenv
+
+# add at top of base.py
+import os
+from urllib.parse import quote_plus
+from sqlalchemy import create_engine, text
+
+# Load .env starting from the current working directory upward (repo root)
+load_dotenv(find_dotenv(usecwd=True))
+
+
+def _build_pg_url_from_env() -> str:
+    url = os.getenv("DATABASE_URL")
+    if url:
+        return url
+
+    host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "localhost"))
+    port = os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", "5433"))
+    name = os.getenv("DB_NAME", os.getenv("POSTGRES_DB", "hird"))
+    user = os.getenv("DB_USER", os.getenv("POSTGRES_USER", "postgres"))
+    pwd = os.getenv("DB_PASS", os.getenv("POSTGRES_PASSWORD", "postgres"))
+    return f"postgresql+psycopg2://{quote_plus(user)}:{quote_plus(pwd)}@{host}:{port}/{name}"
+
+
+import os
+from dataclasses import dataclass
+from datetime import date
+from urllib.parse import quote_plus
+
+import boto3
+from sqlalchemy import create_engine, text
+
+
+def _build_pg_url_from_env() -> str:
+    """
+    Build Postgres connection URL from environment.
+    Priority:
+      1. DATABASE_URL if set
+      2. DB_* vars
+      3. POSTGRES_* vars
+      4. defaults
+    """
+    url = os.getenv("DATABASE_URL")
+    if url:
+        return url
+
+    host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "localhost"))
+    port = os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", "5432"))
+    name = os.getenv("DB_NAME", os.getenv("POSTGRES_DB", "hird"))
+    user = os.getenv("DB_USER", os.getenv("POSTGRES_USER", "postgres"))
+    pwd = os.getenv("DB_PASS", os.getenv("POSTGRES_PASSWORD", "postgres"))
+    return f"postgresql+psycopg2://{quote_plus(user)}:{quote_plus(pwd)}@{host}:{port}/{name}"
 
 
 @dataclass
@@ -15,17 +73,15 @@ class Context:
     s3_secret: str = os.getenv("S3_SECRET_KEY", "minioadmin")
     s3_bucket_raw: str = os.getenv("S3_BUCKET_RAW", "hird-raw")
     s3_raw_prefix: str = os.getenv("S3_RAW_PREFIX", "raw")
-    db_host: str = os.getenv("DB_HOST", "localhost")
-    db_port: str = os.getenv("DB_PORT", "5432")
-    db_user: str = os.getenv("DB_USER", "postgres")
-    db_pass: str = os.getenv("DB_PASS", "postgres")
-    db_name: str = os.getenv("DB_NAME", "hird")
 
     @property
     def engine(self):
-        pw = quote_plus(self.db_pass)
-        url = f"postgresql+psycopg2://{self.db_user}:{pw}@{self.db_host}:{self.db_port}/{self.db_name}"
-        return create_engine(url, future=True)
+        pg_url = _build_pg_url_from_env()
+        engine = create_engine(pg_url, pool_pre_ping=True, future=True)
+        # optional sanity ping
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return engine
 
     @property
     def s3(self):
@@ -46,10 +102,85 @@ def put_raw_bytes(
     return f"s3://{ctx.s3_bucket_raw}/{key}"
 
 
-def write_df(df: pd.DataFrame, table: str, ctx: Context, if_exists="append"):
+def write_df(
+    df: pd.DataFrame, table: str, ctx: Context, if_exists: str = "append"
+) -> int:
+    """
+    Generic loader: appends DataFrame rows into `public.{table}`.
+    Returns the total row count in the table after the write.
+    """
+    if df is None or df.empty:
+        return 0
+
+    # normalize column names (you already did this—kept for safety)
+    df = df.copy()
     df.columns = [c.lower() for c in df.columns]
+
     with ctx.engine.begin() as conn:
-        df.to_sql(table, conn, if_exists=if_exists, index=False)
+        # write rows
+        df.to_sql(
+            table,
+            conn,
+            schema="public",
+            if_exists=if_exists,
+            index=False,
+            method="multi",
+        )
+        # return current table size for quick verification
+        total = conn.execute(
+            text(f'SELECT COUNT(*) FROM public."{table}"')
+        ).scalar_one()
+        return int(total)
+
+
+def write_hpi_upsert(df: pd.DataFrame, ctx: Context) -> int:
+    """
+    Idempotent upsert for house_price_index matching your V1 schema:
+
+    Columns expected:
+      city TEXT, date DATE, index_value DOUBLE PRECISION, measure TEXT, source TEXT
+
+    PK / grain: (city, date, measure)
+    """
+    if df is None or df.empty:
+        return 0
+
+    # Ensure required columns exist and normalized
+    needed = {"city", "date", "index_value", "measure", "source"}
+    miss = needed - set(map(str.lower, df.columns))
+    if miss:
+        raise ValueError(f"write_hpi_upsert: missing columns: {sorted(miss)}")
+
+    # Normalize column names + types
+    dfn = df.copy()
+    dfn.columns = [c.lower() for c in dfn.columns]
+    # Ensure Python date objects (or date-like) for 'date'
+    dfn["date"] = pd.to_datetime(dfn["date"]).dt.date
+    # Force float for index_value
+    dfn["index_value"] = dfn["index_value"].astype(float)
+
+    # Build tuples for execute_values
+    rows = [
+        (r.city, r.date, float(r.index_value), r.measure, r.source)
+        for r in dfn.itertuples(index=False)
+    ]
+
+    upsert_sql = """
+    INSERT INTO public.house_price_index (city, "date", index_value, measure, source)
+    VALUES %s
+    ON CONFLICT (city, "date", measure) DO UPDATE
+      SET index_value = EXCLUDED.index_value,
+          source      = EXCLUDED.source
+    """
+
+    with ctx.engine.begin() as conn:
+        raw = conn.connection  # psycopg2 connection under the SQLAlchemy hood
+        with raw.cursor() as cur:
+            execute_values(cur, upsert_sql, rows)
+        total = conn.execute(
+            text('SELECT COUNT(*) FROM public."house_price_index"')
+        ).scalar_one()
+        return int(total)
 
 
 def month_floor(d: pd.Series) -> pd.Series:

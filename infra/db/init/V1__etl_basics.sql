@@ -20,9 +20,9 @@ CREATE TABLE IF NOT EXISTS public.house_price_index (
 
 CREATE TABLE IF NOT EXISTS public.rents (
   city TEXT NOT NULL,
-  date DATE NOT NULL,
-  bedroom_type TEXT NULL,
+  "date" DATE NOT NULL,
+  bedroom_type TEXT NOT NULL DEFAULT 'overall',
   median_rent DOUBLE PRECISION NOT NULL,
   source TEXT NOT NULL,
-  PRIMARY KEY (city, date, COALESCE(bedroom_type,'overall'))
+  PRIMARY KEY (city, "date", bedroom_type)
 );

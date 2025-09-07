@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_DB: hird
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./infra/db/init:/docker-entrypoint-initdb.d
@@ -28,10 +28,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local
-      PGADMIN_DEFAULT_PASSWORD: adminpw
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
     ports:
-      - "8081:80"
+      - "${PGADMIN_PORT:-8081}:80"
     volumes:
       - pgadmin:/var/lib/pgadmin
 
