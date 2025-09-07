@@ -17,7 +17,7 @@ format:
 	(cd services/ui && npm run lint:fix) || true
 
 # --- ETL convenience targets ---
-etl: etl-crea etl-cmhc etl-statcan etl-boc
+etl: etl-crea etl-cmhc etl-statcan etl-boc etl-rentals
 
 etl-crea:
 \tcd ml && python -m pipelines.daily_ingest --source crea --date today
@@ -30,4 +30,9 @@ etl-statcan:
 
 etl-boc:
 \tcd ml && python -m pipelines.daily_ingest --source boc --date today
+
+etl-rentals:
+\tcd ml && python -m pipelines.daily_ingest --source rentals --date today
+
+
 
