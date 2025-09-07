@@ -1,38 +1,148 @@
-.PHONY: dev judge test format
+# -----------------------------
+# HIRD — Makefile (repo-aligned)
+# -----------------------------
 
-dev:
-	docker-compose up --build
+# Load environment (safe if .env missing)
+-include .env
+export
 
+SHELL := /bin/bash
+DC    ?= docker compose
+
+# Default tools
+PYTHON ?= python
+NODE   ?= npm
+MVN    ?= mvn
+
+.PHONY: help dev up down ps logs reset judge test format \
+        db.up db.down db.logs db.psql db.reset \
+        minio.up minio.logs smoke etl etl-crea etl-cmhc etl-statcan etl-boc etl-rentals \
+        compose.check
+
+# -----------------------------------
+# Quick help
+# -----------------------------------
+help:
+	@echo "Targets:"
+	@echo "  dev              - build & run full stack (postgres, pgadmin, minio, api, ui)"
+	@echo "  up               - run stack without build"
+	@echo "  down             - stop all services"
+	@echo "  ps               - list running services"
+	@echo "  logs             - tail all service logs"
+	@echo "  reset            - nuke volumes & re-create (CAUTION)"
+	@echo "  db.up            - start just postgres + pgadmin"
+	@echo "  db.psql          - open psql to DB (uses .env)"
+	@echo "  judge            - seed demo data, then start stack"
+	@echo "  test             - run ML tests, API tests, UI tests"
+	@echo "  format           - ruff/black for ML; eslint fix for UI"
+	@echo "  etl-*            - run individual ETL sources via daily_ingest"
+	@echo "  smoke            - run minimal CREA→DB insert test"
+	@echo "  compose.check    - validate docker-compose.yaml"
+
+# -----------------------------------
+# Compose orchestration
+# -----------------------------------
+dev: compose.check
+	$(DC) up --build -d postgres pgadmin minio api ui
+	$(DC) ps
+
+up: compose.check
+	$(DC) up -d postgres pgadmin minio api ui
+
+down:
+	$(DC) down
+
+ps:
+	$(DC) ps
+
+logs:
+	$(DC) logs -f
+
+reset:
+	$(DC) down -v
+	$(DC) up -d postgres pgadmin
+
+compose.check:
+	@$(DC) config -q && echo "compose: OK"
+
+# -----------------------------------
+# Database helpers
+# -----------------------------------
+db.up:
+	$(DC) up -d postgres pgadmin
+
+db.down:
+	$(DC) down
+
+db.logs:
+	docker logs -f hird-postgres
+
+db.psql:
+	@echo "Connecting to $$POSTGRES_DB at $$POSTGRES_HOST:$$POSTGRES_PORT as $$POSTGRES_USER"
+	PGPASSWORD="$(POSTGRES_PASSWORD)" psql -h "$(POSTGRES_HOST)" -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)"
+
+db.reset:
+	$(DC) down -v
+	$(DC) up -d postgres
+
+# -----------------------------------
+# MinIO helpers (optional)
+# -----------------------------------
+minio.up:
+	$(DC) up -d minio
+
+minio.logs:
+	$(DC) logs -f minio
+
+# -----------------------------------
+# Seed + stack for demos
+# -----------------------------------
 judge:
-	bash ./infra/scripts/seed_demo.sh kelowna vancouver toronto || powershell -File ./infra/scripts/seed_demo.ps1 kelowna vancouver toronto
-	docker-compose up -d --build
+	@bash ./infra/scripts/seed_demo.sh kelowna vancouver toronto || powershell -File ./infra/scripts/seed_demo.ps1 kelowna vancouver toronto
+	$(DC) up -d
 
+# -----------------------------------
+# Tests
+# -----------------------------------
 test:
-	(cd ml && pytest -q) || true
-	(cd services/api && mvn -q -DskipITs=false test) || true
-	(cd services/ui && npm test) || true
+	@echo "Running ML tests..."
+	@(cd ml && pytest -q) || true
+	@echo "Running API tests..."
+	@(cd services/api && $(MVN) -q -DskipITs=false test) || true
+	@echo "Running UI tests..."
+	@(cd services/ui && $(NODE) test) || true
 
+# -----------------------------------
+# Formatters / Linters
+# -----------------------------------
 format:
-	(cd ml && ruff check --fix . && black .) || true
-	(cd services/ui && npm run lint:fix) || true
+	@echo "Formatting ML..."
+	@(cd ml && ruff check --fix . && black .) || true
+	@echo "Formatting UI..."
+	@(cd services/ui && $(NODE) run lint:fix) || true
 
-# --- ETL convenience targets ---
+# -----------------------------------
+# ETL convenience targets
+# -----------------------------------
 etl: etl-crea etl-cmhc etl-statcan etl-boc etl-rentals
 
 etl-crea:
-\tcd ml && python -m pipelines.daily_ingest --source crea --date today
+	cd ml && $(PYTHON) -m pipelines.daily_ingest --source crea --date today
 
 etl-cmhc:
-\tcd ml && python -m pipelines.daily_ingest --source cmhc --date today
+	cd ml && $(PYTHON) -m pipelines.daily_ingest --source cmhc --date today
 
 etl-statcan:
-\tcd ml && python -m pipelines.daily_ingest --source statcan --date today
+	cd ml && $(PYTHON) -m pipelines.daily_ingest --source statcan --date today
 
 etl-boc:
-\tcd ml && python -m pipelines.daily_ingest --source boc --date today
+	cd ml && $(PYTHON) -m pipelines.daily_ingest --source boc --date today
 
 etl-rentals:
-\tcd ml && python -m pipelines.daily_ingest --source rentals --date today
+	cd ml && $(PYTHON) -m pipelines.daily_ingest --source rentals --date today
 
-
-
+# -----------------------------------
+# Smoke test: minimal CREA→DB insert
+# -----------------------------------
+smoke:
+	cd ml && $(PYTHON) -m pipelines.smoke_crea_to_db
