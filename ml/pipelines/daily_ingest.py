@@ -1,13 +1,15 @@
 import argparse
 import datetime as dt
 from src.etl.base import Context
-from src.etl import crea, cmhc, statcan, boc
+from src.etl import crea, cmhc, statcan, boc, rentals_ca
 
 
 def main():
-    p = argparse.ArgumentParser(description="Daily ETL entry point")
+    p = argparse.ArgumentParser()
     p.add_argument(
-        "--source", required=True, choices=["crea", "cmhc", "statcan", "boc", "all"]
+        "--source",
+        required=True,
+        choices=["crea", "cmhc", "statcan", "boc", "rentals", "all"],
     )
     p.add_argument("--date", default="today")
     args = p.parse_args()
@@ -18,7 +20,7 @@ def main():
     ctx = Context(run_date=run_date)
 
     if args.source == "all":
-        for fn in (crea.run, cmhc.run, statcan.run, boc.run):
+        for fn in (crea.run, cmhc.run, statcan.run, boc.run, rentals_ca.run):
             fn(ctx)
     elif args.source == "crea":
         crea.run(ctx)
@@ -28,6 +30,8 @@ def main():
         statcan.run(ctx)
     elif args.source == "boc":
         boc.run(ctx)
+    elif args.source == "rentals":
+        rentals_ca.run(ctx)
 
 
 if __name__ == "__main__":
