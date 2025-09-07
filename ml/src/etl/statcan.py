@@ -1,6 +1,5 @@
-import pandas as pd
-from .base import Context, write_df, month_floor, put_raw_bytes
-from .statcan_wds import download_table_csv
+from src.etl.base import Context, write_df, month_floor, put_raw_bytes
+from src.etl.statcan_wds import download_table_csv
 
 PID_CPI = "1810000401"  # 18-10-0004-01
 
