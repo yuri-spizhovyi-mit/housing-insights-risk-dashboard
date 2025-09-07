@@ -7,3 +7,4 @@ openpyxl
 boto3
 beautifulsoup4   # for Rentals.ca scraper
 lxml             # helps pandas/bs4 parse HTML tables
+pytest
