@@ -22,3 +22,6 @@ data/*.parquet
 # Artifacts (use MinIO/S3)
 artifacts/
 reports/
+# Local helper scripts
+start-minio.ps1
+stop-minio.ps1
