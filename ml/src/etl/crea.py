@@ -1,8 +1,16 @@
-import io, re, zipfile, datetime as dt
-import pandas as pd, requests
-from .base import Context, write_df, put_raw_bytes, month_floor
+import io
+import re
+import zipfile
+import pandas as pd
+import requests
+
+from .base import Context, write_df, write_hpi_upsert, put_raw_bytes, month_floor
 
 HPI_TOOL_URL = "https://www.crea.ca/housing-market-stats/mls-home-price-index/hpi-tool/"
+
+# --------------------------------------------------------------------------------------
+# Discovery
+# --------------------------------------------------------------------------------------
 
 
 def _latest_zip_url() -> str:
@@ -15,127 +23,221 @@ def _latest_zip_url() -> str:
     return m.group(0)
 
 
+def _has_city_col(df: pd.DataFrame) -> bool:
+    cols_lower = {str(c).lower(): c for c in df.columns}
+    return any(k in cols_lower for k in ("city", "cma", "region", "area"))
+
+
 def _read_any_table_from_zip(zb: bytes) -> pd.DataFrame:
+    """
+    Prefer a CSV/XLSX sheet that contains a city-like column.
+    Fallback to the first CSV/XLSX if none found (tidy() will provide a national fallback).
+    """
     with zipfile.ZipFile(io.BytesIO(zb)) as z:
         names = z.namelist()
-        # prefer CSV; else first xlsx
-        csvs = [n for n in names if n.lower().endswith(".csv")]
-        if csvs:
-            return pd.read_csv(z.open(csvs[0]))
-        xlsx = next(n for n in names if n.lower().endswith((".xlsx", ".xls")))
-        with z.open(xlsx) as f:
-            xl = pd.ExcelFile(f)
-            # try to find a likely sheet; else first
-            sheet = next(
-                (
-                    s
-                    for s in xl.sheet_names
-                    if "benchmark" in s.lower()
-                    or "composite" in s.lower()
-                    or "hpi" in s.lower()
-                ),
-                xl.sheet_names[0],
-            )
-            return xl.parse(sheet)
+
+        # 1) Try CSVs with a city-like column
+        for n in names:
+            if n.lower().endswith(".csv"):
+                try:
+                    df = pd.read_csv(z.open(n))
+                    if _has_city_col(df):
+                        return df
+                except Exception:
+                    pass
+
+        # 2) Try XLSX sheets with a city-like column
+        xlsx_names = [n for n in names if n.lower().endswith((".xlsx", ".xls"))]
+        for n in xlsx_names:
+            try:
+                with z.open(n) as f:
+                    xl = pd.ExcelFile(f)
+                    for s in xl.sheet_names:
+                        try:
+                            df = xl.parse(s, dtype=object)
+                            if _has_city_col(df):
+                                return df
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+
+        # 3) Fallback: first CSV or first XLSX sheet
+        for n in names:
+            if n.lower().endswith(".csv"):
+                return pd.read_csv(z.open(n))
+        if xlsx_names:
+            with z.open(xlsx_names[0]) as f:
+                xl = pd.ExcelFile(f)
+                return xl.parse(xl.sheet_names[0])
+
+    raise RuntimeError("No readable table found in CREA ZIP.")
+
+
+# --------------------------------------------------------------------------------------
+# Tidy
+# --------------------------------------------------------------------------------------
+
+
+def _detect_date_col(df: pd.DataFrame) -> str:
+    cols_lower = {str(c).lower(): c for c in df.columns}
+    date_col = next(
+        (cols_lower[k] for k in ("date", "period", "ref_date") if k in cols_lower), None
+    )
+    if date_col:
+        return date_col
+    # fallback: if first column parses as datetime, use it
+    if len(df.columns) > 0:
+        c0 = df.columns[0]
+        try:
+            pd.to_datetime(df[c0], errors="raise")
+            return c0
+        except Exception:
+            pass
+    raise RuntimeError(f"CREA HPI date column not found. Columns: {list(df.columns)}")
 
 
 def _tidy(df: pd.DataFrame) -> pd.DataFrame:
-    # Normalize column names (strip spaces)
-    df = df.rename(columns={c: c.strip() for c in df.columns})
-    cols_lower = {c.lower(): c for c in df.columns}
+    """
+    Output columns: city, date (month-floor), index_value (float), measure, source='CREA'
+    Strategy:
+      1) Prefer city-level rows (long or matrix melted).
+      2) If no city-level data exists, fall back to national/composite as city='Canada'.
+    """
+    # normalize headers
+    df = df.rename(columns={c: str(c).strip() for c in df.columns})
+    cols_lower = {str(c).lower(): c for c in df.columns}
+    date_col = _detect_date_col(df)
 
-    # Identify the date column
-    date_col = next(
-        (cols_lower[k] for k in cols_lower if k in ("date", "period", "ref_date")), None
-    )
-    if date_col is None:
-        raise RuntimeError(
-            f"CREA HPI date column not found. Columns seen: {list(df.columns)}"
-        )
-
-    # Case A: long/tidy already (has City column + value column)
+    # detect long case (has a city-like column)
     city_col = next(
-        (cols_lower[k] for k in cols_lower if k in ("city", "cma", "region", "area")),
+        (cols_lower[k] for k in ("city", "cma", "region", "area") if k in cols_lower),
         None,
     )
-    price_col = next(
-        (c for c in df.columns if "benchmark" in c.lower() and "price" in c.lower()),
-        None,
-    )
-    hpi_single_col = next(
+    value_col = next(
         (
             c
             for c in df.columns
-            if re.search(r"\bhpi\b", c.lower()) and "composite" in c.lower()
+            if "benchmark" in str(c).lower() and "price" in str(c).lower()
         ),
         None,
     )
-
-    if city_col and (price_col or hpi_single_col):
-        # already has a single value column
-        if price_col:
-            tidy = df.rename(
-                columns={city_col: "city", date_col: "date", price_col: "index_value"}
-            ).assign(measure="benchmark_price", source="CREA")
-        else:
-            tidy = df.rename(
-                columns={
-                    city_col: "city",
-                    date_col: "date",
-                    hpi_single_col: "index_value",
-                }
-            ).assign(measure="hpi_index", source="CREA")
-
-    else:
-        # Case B: wide format like: Date, Composite_HPI_SA, Detached_HPI_SA, ...
-        # Melt non-date columns into long form
-        value_cols = [c for c in df.columns if c != date_col]
-        long = df.melt(
-            id_vars=[date_col],
-            value_vars=value_cols,
-            var_name="series",
-            value_name="index_value",
+    if not value_col:
+        value_col = next(
+            (c for c in df.columns if re.search(r"\bhpi\b", str(c).lower())), None
         )
-        long = long.rename(columns={date_col: "date"})
-        # There is no per-city in this wide set; it's usually a given geography (Composite).
-        # We’ll set city=None or "Canada" only if explicitly national; prefer None.
-        long["city"] = None
 
-        # Map measure based on series name
-        def _measure_from_series(s: str) -> str:
-            s = s.lower()
-            if "benchmark" in s and "price" in s:
-                return "benchmark_price"
-            if "hpi" in s:
-                return "hpi_index"
-            return "value"
-
-        long["measure"] = long["series"].apply(_measure_from_series)
-        long["source"] = "CREA"
-        tidy = long[["city", "date", "index_value", "measure", "source"]]
-
-    # Normalize date to month start
-    tidy["date"] = month_floor(tidy["date"])
-    # If we have city names, filter to focus cities (optional)
-    if "city" in tidy.columns and tidy["city"].notna().any():
-        tidy = tidy[
-            tidy["city"].isin(["Kelowna", "Vancouver", "Toronto"]) | tidy["city"].isna()
+    if city_col:
+        if value_col:
+            # Case A1: already long with single value column
+            tidy = df.rename(
+                columns={city_col: "city", date_col: "date", value_col: "index_value"}
+            )
+            tidy["measure"] = (
+                "HPI" if "hpi" in str(value_col).lower() else "benchmark_price"
+            )
+            tidy["source"] = "CREA"
+        else:
+            # Case A2: long with multiple value columns → melt
+            measure_cols = [c for c in df.columns if c not in (city_col, date_col)]
+            long = df.melt(
+                id_vars=[city_col, date_col],
+                value_vars=measure_cols,
+                var_name="measure",
+                value_name="index_value",
+            )
+            tidy = long.rename(columns={city_col: "city", date_col: "date"})
+            tidy["source"] = "CREA"
+    else:
+        # Case B: matrix (cities as columns) OR national-only sheet
+        value_cols = [c for c in df.columns if c != date_col]
+        non_city_regex = r"(composite|detached|single|two[_\s-]?storey|apartment|benchmark|hpi|sa|nsa)"
+        likely_city_cols = [
+            c for c in value_cols if not re.search(non_city_regex, str(c), flags=re.I)
         ]
 
-    # Keep only rows with a numeric index_value
-    tidy = tidy[pd.to_numeric(tidy["index_value"], errors="coerce").notna()]
-    tidy["index_value"] = tidy["index_value"].astype(float)
+        if likely_city_cols:
+            # Melt matrix with city columns
+            long = (
+                df[[date_col] + likely_city_cols]
+                .melt(id_vars=[date_col], var_name="city", value_name="index_value")
+                .rename(columns={date_col: "date"})
+            )
+            long["measure"] = "HPI"
+            long["source"] = "CREA"
+            tidy = long[["city", "date", "index_value", "measure", "source"]]
+        else:
+            # No city columns at all → FALLBACK to national/composite as city='Canada'
+            # Choose the best available composite column in order of preference
+            candidates = [
+                # Seasonally adjusted HPI first
+                *[
+                    c
+                    for c in value_cols
+                    if re.search(r"^Composite.*HPI.*SA$", str(c), re.I)
+                ],
+                *[
+                    c
+                    for c in value_cols
+                    if re.search(r"^Composite.*HPI$", str(c), re.I)
+                ],
+                # Then benchmark price if no HPI
+                *[
+                    c
+                    for c in value_cols
+                    if re.search(r"^Composite.*Benchmark.*SA$", str(c), re.I)
+                ],
+                *[
+                    c
+                    for c in value_cols
+                    if re.search(r"^Composite.*Benchmark", str(c), re.I)
+                ],
+            ]
+            if not candidates:
+                # Still nothing ⇒ produce empty; caller will still write_df (no-op)
+                tidy = pd.DataFrame(
+                    columns=["city", "date", "index_value", "measure", "source"]
+                )
+            else:
+                best = candidates[0]
+                measure = "HPI" if "hpi" in str(best).lower() else "benchmark_price"
+                tidy = (
+                    df[[date_col, best]]
+                    .rename(columns={date_col: "date", best: "index_value"})
+                    .assign(city="Canada", measure=measure, source="CREA")
+                )
+
+    # normalize date & numeric
+    if not tidy.empty:
+        tidy["date"] = month_floor(tidy["date"])
+        tidy = tidy[pd.to_numeric(tidy["index_value"], errors="coerce").notna()]
+        tidy["index_value"] = tidy["index_value"].astype(float)
+        tidy["city"] = tidy["city"].astype("string").str.strip()
+        tidy = tidy.dropna(subset=["city"])
+
     return tidy
 
 
+# --------------------------------------------------------------------------------------
+# Pipeline
+# --------------------------------------------------------------------------------------
+
+
 def run(ctx: Context):
+    # 1) discover & download latest CREA ZIP
     url = _latest_zip_url()
     resp = requests.get(url, timeout=180)
     resp.raise_for_status()
+
+    # 2) snapshot raw ZIP to MinIO
     key = (
         f"{ctx.s3_raw_prefix}/crea/{ctx.run_date.isoformat()}/{url.rsplit('/', 1)[-1]}"
     )
     put_raw_bytes(ctx, key, resp.content, "application/zip")
+
+    # 3) parse + tidy (with fallback to Canada)
     raw_df = _read_any_table_from_zip(resp.content)
     tidy = _tidy(raw_df)
-    write_df(tidy, "house_price_index", ctx)
+
+    # 4) write to Postgres (even if empty, so tests capture the intent)
+    write_hpi_upsert(tidy, ctx)

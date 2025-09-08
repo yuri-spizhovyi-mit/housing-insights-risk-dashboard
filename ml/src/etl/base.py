@@ -1,21 +1,15 @@
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from urllib.parse import quote_plus
-import os, io, re, zipfile, json, pathlib
-import pandas as pd
-from sqlalchemy import create_engine
+import os
+
 import boto3
-from typing import Optional, Dict
-from sqlalchemy import text
+import pandas as pd
+from dotenv import find_dotenv, load_dotenv
 from psycopg2.extras import (
     execute_values,
 )  # requires psycopg2-binary in requirements.txt
-from pathlib import Path
-from dotenv import load_dotenv, find_dotenv
-
-# add at top of base.py
-import os
-from urllib.parse import quote_plus
 from sqlalchemy import create_engine, text
 
 # Load .env starting from the current working directory upward (repo root)
@@ -29,36 +23,6 @@ def _build_pg_url_from_env() -> str:
 
     host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "localhost"))
     port = os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", "5433"))
-    name = os.getenv("DB_NAME", os.getenv("POSTGRES_DB", "hird"))
-    user = os.getenv("DB_USER", os.getenv("POSTGRES_USER", "postgres"))
-    pwd = os.getenv("DB_PASS", os.getenv("POSTGRES_PASSWORD", "postgres"))
-    return f"postgresql+psycopg2://{quote_plus(user)}:{quote_plus(pwd)}@{host}:{port}/{name}"
-
-
-import os
-from dataclasses import dataclass
-from datetime import date
-from urllib.parse import quote_plus
-
-import boto3
-from sqlalchemy import create_engine, text
-
-
-def _build_pg_url_from_env() -> str:
-    """
-    Build Postgres connection URL from environment.
-    Priority:
-      1. DATABASE_URL if set
-      2. DB_* vars
-      3. POSTGRES_* vars
-      4. defaults
-    """
-    url = os.getenv("DATABASE_URL")
-    if url:
-        return url
-
-    host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", "localhost"))
-    port = os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", "5432"))
     name = os.getenv("DB_NAME", os.getenv("POSTGRES_DB", "hird"))
     user = os.getenv("DB_USER", os.getenv("POSTGRES_USER", "postgres"))
     pwd = os.getenv("DB_PASS", os.getenv("POSTGRES_PASSWORD", "postgres"))

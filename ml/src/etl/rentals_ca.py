@@ -6,8 +6,10 @@ from datetime import date
 
 REPORT_URL = "https://rentals.ca/national-rent-report"
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
 
@@ -30,6 +32,9 @@ def _find_city_table(html: str) -> pd.DataFrame | None:
 
 def run(ctx: Context):
     r = requests.get(REPORT_URL, headers=HEADERS, timeout=60)
+    if r.status_code == 403:
+        print("[WARN] Rentals.ca blocked request; skipping rents load.")
+        return
     r.raise_for_status()
     html = r.text
     put_raw_bytes(

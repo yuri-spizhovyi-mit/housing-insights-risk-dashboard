@@ -15,21 +15,31 @@ def ctx():
 def _safe_run(fn, ctx):
     """Run adapter, return DataFrame if possible."""
     try:
-        # Each adapter normally calls write_df.
-        # Instead, patch write_df to just return df.
+        # Each adapter normally calls write_df or write_hpi_upsert.
+        # Instead, patch these to just return df.
         import ml.src.etl.base as base
+        import ml.src.etl.crea as crea
 
         orig_write_df = base.write_df
+        orig_write_hpi_upsert = base.write_hpi_upsert
+        orig_crea_write_hpi_upsert = crea.write_hpi_upsert
         dfs = {}
 
         def fake_write_df(df: pd.DataFrame, table: str, ctx, if_exists="append"):
             dfs[table] = df
 
+        def fake_write_hpi_upsert(df: pd.DataFrame, ctx):
+            dfs["house_price_index"] = df
+
         base.write_df = fake_write_df
+        base.write_hpi_upsert = fake_write_hpi_upsert
+        crea.write_hpi_upsert = fake_write_hpi_upsert
         fn(ctx)
         return dfs
     finally:
         base.write_df = orig_write_df
+        base.write_hpi_upsert = orig_write_hpi_upsert
+        crea.write_hpi_upsert = orig_crea_write_hpi_upsert
 
 
 def test_crea(ctx):
