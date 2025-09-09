@@ -3,6 +3,7 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import quote_plus
 import os
+from sqlalchemy import text
 
 import boto3
 import pandas as pd
@@ -150,3 +151,29 @@ def write_hpi_upsert(df: pd.DataFrame, ctx: Context) -> int:
 def month_floor(d: pd.Series) -> pd.Series:
     # convert to first day of month
     return pd.to_datetime(d.astype(str)).dt.to_period("M").dt.to_timestamp()
+
+
+def write_metrics_upsert(df: pd.DataFrame, ctx: "Context") -> None:
+    if df is None or df.empty:
+        return
+    needed = {"metric", "city", "date", "value", "source"}
+    missing = needed - set(df.columns)
+    if missing:
+        raise ValueError(f"metrics upsert missing columns: {missing}")
+
+    df = df.dropna(subset=["metric", "city", "date"]).drop_duplicates(
+        subset=["metric", "city", "date"], keep="last"
+    )
+
+    sql = text("""
+        INSERT INTO public.metrics (metric, value, city, "date", source)
+        VALUES (:metric, :value, :city, :date, :source)
+        ON CONFLICT ("date", metric, city)
+        DO UPDATE SET
+            value  = EXCLUDED.value,
+            source = EXCLUDED.source
+    """)
+    rows = df.to_dict(orient="records")
+    eng = ctx.engine()
+    with eng.begin() as cx:
+        cx.execute(sql, rows)
