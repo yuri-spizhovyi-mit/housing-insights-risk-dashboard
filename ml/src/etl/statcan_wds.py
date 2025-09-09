@@ -10,12 +10,15 @@ WDS = "https://www150.statcan.gc.ca/t1/wds/rest"
 
 # 1) Use a Session with friendly headers (WDS/CloudFront can be picky)
 SESSION = requests.Session()
-SESSION.headers.update({
-    "User-Agent": "hird-etl/0.1 (+https://github.com/yuri-spizhovyi-mit/housing-insights-risk-dashboard)",
-    "Accept": "*/*",
-    "Accept-Language": "en",
-    "Connection": "keep-alive",
-})
+SESSION.headers.update(
+    {
+        "User-Agent": "hird-etl/0.1 (+https://github.com/yuri-spizhovyi-mit/housing-insights-risk-dashboard)",
+        "Accept": "*/*",
+        "Accept-Language": "en",
+        "Connection": "keep-alive",
+    }
+)
+
 
 def _get_json_with_retry(url: str, tries: int = 3, backoff: float = 1.0):
     last = None
@@ -27,8 +30,9 @@ def _get_json_with_retry(url: str, tries: int = 3, backoff: float = 1.0):
         if r.ok:
             return r.json()
         last = r
-        time.sleep(backoff * (2 ** i))
+        time.sleep(backoff * (2**i))
     last.raise_for_status()
+
 
 def _get_bytes_with_retry(url: str, tries: int = 3, backoff: float = 1.0) -> bytes:
     last = None
@@ -37,8 +41,9 @@ def _get_bytes_with_retry(url: str, tries: int = 3, backoff: float = 1.0) -> byt
         if r.ok:
             return r.content
         last = r
-        time.sleep(backoff * (2 ** i))
+        time.sleep(backoff * (2**i))
     last.raise_for_status()
+
 
 def download_table_csv(pid: str, lang: str = "en") -> pd.DataFrame:
     """

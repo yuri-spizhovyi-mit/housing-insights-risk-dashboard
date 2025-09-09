@@ -1,10 +1,16 @@
+from ml.src.etl.base import (
+    Context,
+    write_df,
+    write_hpi_upsert,
+    put_raw_bytes,
+    month_floor,
+)
 import io
 import re
 import zipfile
 import pandas as pd
 import requests
 
-from .base import Context, write_df, write_hpi_upsert, put_raw_bytes, month_floor
 
 HPI_TOOL_URL = "https://www.crea.ca/housing-market-stats/mls-home-price-index/hpi-tool/"
 
