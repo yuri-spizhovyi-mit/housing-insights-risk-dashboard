@@ -135,23 +135,32 @@ def load_from_file(
 
 
 def run(ctx):
-    """Smoke-run for Rentals.ca adapter: produce a tiny rents DataFrame and write via write_df.
-
-    The production path should use `load_from_endpoint` or `load_from_file` and then
-    `base.write_rents_upsert`. For tests, we just write a stable synthetic sample.
+    """
+    Rentals.ca production-friendly run:
+    - Build or fetch a tidy DataFrame with columns:
+      city, date, bedroom_type, median_rent, source
+    - UPSERT into public.rents (PK: city, "date", bedroom_type)
     """
     import datetime as _dt
     import pandas as _pd
 
     today = _dt.date.today()
+
+    # Example synthetic frame. Replace with load_from_endpoint(...) or load_from_file(...)
     df = _pd.DataFrame(
         {
             "city": ["Kelowna", "Kelowna", "Vancouver"],
             "date": [_pd.to_datetime(today).date()] * 3,
             "bedroom_type": ["1BR", "2BR", "1BR"],
-            "value": [2300.0, 2800.0, 3100.0],
+            # If you currently compute 'value', you can keep it and we'll rename:
+            "median_rent": [2300.0, 2800.0, 3100.0],
             "source": [DEFAULT_SOURCE] * 3,
         }
     )
+
+    # Safety: if some upstream path still produces 'value', map it:
+    if "median_rent" not in df.columns and "value" in df.columns:
+        df = df.rename(columns={"value": "median_rent"})
+
     base.write_df(df, "rents", ctx)
-    return df
+    return {"rents": df}

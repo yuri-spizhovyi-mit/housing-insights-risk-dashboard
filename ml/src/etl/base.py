@@ -249,29 +249,47 @@ def write_rents_upsert(
     df: pd.DataFrame, engine: Engine, schema: Optional[str] = "public"
 ) -> None:
     """
-    Upsert into rents(city, date, bedroom_type, value, source)
-    Primary key: (city, date, bedroom_type)
+    Upsert into rents(city, "date", bedroom_type, median_rent, source)
+    Primary key: (city, "date", bedroom_type)
 
-    Expected df columns: city, date (datetime64[ns]/date or str YYYY-MM-DD),
-                         bedroom_type (str), value (float), source (str)
+    Accepts either a 'median_rent' column OR a legacy 'value' column
+    and writes to 'median_rent' in the DB.
     """
-    required = {"city", "date", "bedroom_type", "value", "source"}
+    if df is None or df.empty:
+        return
+
+    df = df.copy()
+
+    # Accept legacy 'value' and map to 'median_rent' if needed
+    if "median_rent" not in df.columns:
+        if "value" in df.columns:
+            df["median_rent"] = pd.to_numeric(df["value"], errors="coerce")
+        else:
+            raise ValueError("rents upsert: expected 'median_rent' or 'value' column")
+
+    required = {"city", "date", "bedroom_type", "median_rent", "source"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"rents upsert: missing columns: {missing}")
 
-    # Ensure date as string (YYYY-MM-DD) for raw SQL binding safety
-    df = df.copy()
-    df["date"] = pd.to_datetime(df["date"]).dt.date.astype(str)
+    # Normalize types for safety
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date.astype(str)
+    df["median_rent"] = pd.to_numeric(df["median_rent"], errors="coerce")
 
-    rows = df[["city", "date", "bedroom_type", "value", "source"]].to_dict("records")
+    # Drop rows that don't have a date or rent
+    df = df.dropna(subset=["date", "median_rent"])
 
+    rows = df[["city", "date", "bedroom_type", "median_rent", "source"]].to_dict(
+        "records"
+    )
+
+    # Note: "date" is quoted in your DDL; keep it quoted here too
     sql = text(f"""
-        INSERT INTO {schema}.rents (city, date, bedroom_type, value, source)
-        VALUES (:city, :date, :bedroom_type, :value, :source)
-        ON CONFLICT (city, date, bedroom_type)
+        INSERT INTO {schema}.rents (city, "date", bedroom_type, median_rent, source)
+        VALUES (:city, :date, :bedroom_type, :median_rent, :source)
+        ON CONFLICT (city, "date", bedroom_type)
         DO UPDATE SET
-            value = EXCLUDED.value,
+            median_rent = EXCLUDED.median_rent,
             source = EXCLUDED.source
     """)
 
