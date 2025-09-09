@@ -1,3 +1,8 @@
+from typing import Optional
+import pandas as pd
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -238,3 +243,37 @@ def write_hpi_upsert(df: pd.DataFrame, ctx: "Context") -> None:
     eng = _resolve_engine(ctx)  # << fix here too
     with eng.begin() as cx:
         cx.execute(sql, rows)
+
+
+def write_rents_upsert(
+    df: pd.DataFrame, engine: Engine, schema: Optional[str] = "public"
+) -> None:
+    """
+    Upsert into rents(city, date, bedroom_type, value, source)
+    Primary key: (city, date, bedroom_type)
+
+    Expected df columns: city, date (datetime64[ns]/date or str YYYY-MM-DD),
+                         bedroom_type (str), value (float), source (str)
+    """
+    required = {"city", "date", "bedroom_type", "value", "source"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"rents upsert: missing columns: {missing}")
+
+    # Ensure date as string (YYYY-MM-DD) for raw SQL binding safety
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.date.astype(str)
+
+    rows = df[["city", "date", "bedroom_type", "value", "source"]].to_dict("records")
+
+    sql = text(f"""
+        INSERT INTO {schema}.rents (city, date, bedroom_type, value, source)
+        VALUES (:city, :date, :bedroom_type, :value, :source)
+        ON CONFLICT (city, date, bedroom_type)
+        DO UPDATE SET
+            value = EXCLUDED.value,
+            source = EXCLUDED.source
+    """)
+
+    with engine.begin() as conn:
+        conn.execute(sql, rows)
