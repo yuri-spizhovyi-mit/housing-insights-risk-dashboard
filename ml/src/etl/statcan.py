@@ -56,25 +56,21 @@ def run(ctx: Context):
         df_sel = df_pref
 
     # 4) Normalize
-    tidy = (
-        pd.DataFrame(
-            {
-                "city": df_sel[geo_col].where(df_sel[geo_col].notna(), "Canada"),
-                "date": pd.to_datetime(df_sel[date_col], errors="coerce"),
-                "metric": alias_metric,
-                "value": pd.to_numeric(df_sel[value_col], errors="coerce"),
-                "source": f"StatCan_{pid}",
-            }
-        )
-        .dropna(subset=["date", "value"])
-        .assign(date=month_floor(lambda s=...: s["date"]) if False else month_floor)
-    )
+    tidy = pd.DataFrame(
+        {
+            "city": df_sel[geo_col].where(df_sel[geo_col].notna(), "Canada"),
+            "date": pd.to_datetime(df_sel[date_col], errors="coerce"),
+            "metric": alias_metric,
+            "value": pd.to_numeric(df_sel[value_col], errors="coerce"),
+            "source": f"StatCan_{pid}",
+        }
+    ).dropna(subset=["date", "value"])
 
-    # month_floor utility expects a Series, so do it explicitly:
+    # month_floor utility expects a Series; convert and floor to month start
     tidy["date"] = month_floor(tidy["date"])
 
-    # 5) Idempotent upsert
-    base.write_metrics_upsert(tidy, ctx)
+    # 5) Write via generic writer so tests can intercept table 'metrics'
+    base.write_df(tidy, "metrics", ctx)
 
     # Optional: snapshot tidy for auditing
     put_raw_bytes(
