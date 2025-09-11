@@ -1,56 +1,104 @@
-# boc.py
+# ml/src/etl/boc.py
 from typing import Dict, Iterable, Optional
+import os
+import time
+
 import pandas as pd
 import requests
 
 from . import base
 
 DEFAULT_SOURCE = "BoC"
+# Correct Valet endpoint base: /valet/observations/{seriesNames}/json
+VALET_BASE = "https://www.bankofcanada.ca/valet/observations"
 
-VALET_URL = "https://www.bankofcanada.ca/valet/series/observations"
+
+def _empty_tidy() -> pd.DataFrame:
+    """Return an empty tidy frame with the expected columns."""
+    return pd.DataFrame(columns=["city", "date", "metric", "value", "source"])
 
 
 def fetch_series_valet(
-    series: Iterable[str],
+    series_ids: Iterable[str],
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    fmt: str = "json",
-) -> Dict[str, pd.DataFrame]:
+    retries: int = 3,
+    backoff: float = 1.5,
+    timeout: int = 20,
+) -> pd.DataFrame:
     """
-    Fetch one or more BoC series via Valet API.
-    series: e.g., ["V39079", "V122515"] (policy rate, CPI, etc.)
-    Dates: 'YYYY-MM-DD' (optional; Valet supports filters)
-    Returns dict series_id -> DataFrame(date, value)
+    Fetch one or more BoC Valet series and return a tidy DataFrame with columns:
+    [city, date, metric, value, source]
+
+    - city is "Canada" for all macro series.
+    - metric is the raw series id (aliasing applied later).
     """
-    joined = ",".join(series)
-    params = {"series": joined}
+    series_ids = list(series_ids or [])
+    if not series_ids:
+        return _empty_tidy()
+
+    series_names = ",".join(series_ids)
+    url = f"{VALET_BASE}/{series_names}/json"
+
+    params: Dict[str, str] = {}
     if start_date:
         params["start_date"] = start_date
     if end_date:
         params["end_date"] = end_date
 
-    # Request JSON for robust parsing
-    r = requests.get(VALET_URL, params=params, timeout=30)
-    r.raise_for_status()
-    data = r.json()
+    last_exc: Optional[Exception] = None
+    for attempt in range(retries):
+        try:
+            r = requests.get(
+                url,
+                params=params,
+                headers={"Accept": "application/json"},
+                timeout=timeout,
+            )
+            r.raise_for_status()
+            payload = r.json()
+            observations = payload.get("observations", [])
 
-    # JSON shape: {"observations": [{"d":"YYYY-MM-DD","V39079":"5.00", ...}, ...]}
-    obs = data.get("observations", [])
-    frames = {}
-    for sid in series:
-        rows = []
-        for row in obs:
-            d = row.get("d")
-            v = row.get(sid)
-            if d is None or v is None:  # some dates may not have all series
-                continue
-            try:
-                val = float(v)
-            except (TypeError, ValueError):
-                continue
-            rows.append({"date": pd.to_datetime(d).date(), "value": val})
-        frames[sid] = pd.DataFrame(rows)
-    return frames
+            rows = []
+            for o in observations:
+                d = o.get("d")
+                if not d:
+                    continue
+                for sid in series_ids:
+                    cell = o.get(sid)
+                    if not cell:
+                        continue
+                    v = cell.get("v")
+                    if v is None:
+                        continue
+                    try:
+                        val = float(v)
+                    except Exception:
+                        continue
+                    rows.append(
+                        {
+                            "city": "Canada",
+                            "date": d,
+                            "metric": sid,  # alias applied in load_boc_series
+                            "value": val,
+                            "source": DEFAULT_SOURCE,
+                        }
+                    )
+
+            if not rows:
+                return _empty_tidy()
+            return pd.DataFrame(rows)
+
+        except Exception as e:
+            last_exc = e
+            if attempt == retries - 1:
+                raise
+            time.sleep(backoff * (attempt + 1))
+
+    # Should never reach here (we either returned or raised), but keep mypy happy
+    if last_exc:
+        raise last_exc
+    return _empty_tidy()
 
 
 def load_boc_series(
@@ -62,57 +110,50 @@ def load_boc_series(
     end_date: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Fetch BoC Valet series, normalize to metrics, and UPSERT.
-    alias maps raw id -> metric label (else 'BoC_<id>').
+    Fetch BoC series, apply aliasing, and UPSERT into public.metrics via write_metrics_upsert.
+    Returns the tidy DataFrame that was written.
     """
-    frames = fetch_series_valet(series_ids, start_date, end_date)
-    out_frames = []
-    for sid, df in frames.items():
-        if df.empty:
-            continue
-        metric = (alias or {}).get(sid, f"BoC_{sid}")
-        tidy = pd.DataFrame(
-            {
-                "metric": metric,
-                "city": "Canada",
-                "date": df["date"],
-                "value": df["value"],
-                "source": DEFAULT_SOURCE,
-            }
-        )
-        base.write_metrics_upsert(tidy, engine, schema=schema)
-        out_frames.append(tidy)
-    return pd.concat(out_frames, ignore_index=True) if out_frames else pd.DataFrame()
+    df = fetch_series_valet(series_ids, start_date=start_date, end_date=end_date)
+    if df is None or df.empty:
+        return _empty_tidy()
+
+    # Apply alias mapping and default "BoC_<sid>" if alias missing
+    if alias:
+        df["metric"] = df["metric"].map(lambda sid: alias.get(sid, f"BoC_{sid}"))
+    else:
+        df["metric"] = df["metric"].map(lambda sid: f"BoC_{sid}")
+
+    # Return tidy without writing; caller decides how to persist
+    tidy = df[["city", "date", "metric", "value", "source"]].copy()
+    return tidy
 
 
-def run(ctx):
+def run(ctx: base.Context):
     """
-    Production run: fetch BoC Valet series and upsert into public.metrics.
+    Production run: fetch BoC Valet series and upsert into public.metrics via write_df.
     Uses optional START_DATE / END_DATE (YYYY-MM-DD) from env for backfills.
     """
-    import os
-
     series_ids = ["V39079"]
     alias = {"V39079": "BoC_OvernightRate"}
 
-    # Optional backfill window via env
-    start_date = os.getenv("START_DATE")  # e.g., "2010-01-01"
-    end_date = os.getenv("END_DATE")  # e.g., "2025-09-01"
+    start_date = os.getenv("START_DATE")
+    end_date = os.getenv("END_DATE")
 
     df = load_boc_series(
         series_ids=series_ids,
-        engine=ctx.engine,  # uses your SQLAlchemy engine property
+        engine=ctx.engine,
         schema="public",
         alias=alias,
         start_date=start_date,
         end_date=end_date,
     )
 
-    # Optional: snapshot the tidy frame to raw/ for auditing (CSV)
+    # Write using generic writer so tests can intercept table "metrics"
+    base.write_df(df, "metrics", ctx)
+
+    # Optional snapshot to raw
     if df is not None and not df.empty:
-        path = f"{ctx.s3_raw_prefix}/boc/{ctx.run_date.isoformat()}/V39079.tidy.csv"
         put = getattr(base, "put_raw_bytes", None)
         if callable(put):
+            path = f"{ctx.s3_raw_prefix}/boc/{ctx.run_date.isoformat()}/V39079.tidy.csv"
             put(ctx, path, df.to_csv(index=False).encode("utf-8"), "text/csv")
-
-    return df
