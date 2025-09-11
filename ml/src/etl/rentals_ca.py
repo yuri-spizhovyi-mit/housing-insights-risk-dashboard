@@ -164,3 +164,95 @@ def run(ctx):
 
     base.write_df(df, "rents", ctx)
     return {"rents": df}
+
+
+def run_file(
+    ctx,
+    path="data/rentals.csv",
+    city_map: Optional[Dict[str, str]] = None,
+    bedroom_map: Optional[Dict[str, str]] = None,
+    date_field: str = "Month",
+    price_field: str = "AverageRent",
+):
+    """
+    Version A: Load from local CSV/JSON, normalize, snapshot, and upsert into rents.
+    """
+    city_map = city_map or {
+        "Kelowna": "Kelowna",
+        "Vancouver": "Vancouver",
+        "Toronto": "Toronto",
+    }
+    bedroom_map = bedroom_map or {
+        "overall": "overall",
+        "0br": "0BR",
+        "1br": "1BR",
+        "2br": "2BR",
+        "3br": "3BR",
+    }
+
+    df = load_from_file(
+        path=path,
+        engine=ctx.engine,
+        schema="public",
+        date_field=date_field,
+        price_field=price_field,
+        city_map=city_map,
+        bedroom_map=bedroom_map,
+    )
+
+    # Snapshot tidy to raw/
+    if df is not None and not df.empty:
+        put = getattr(base, "put_raw_bytes", None)
+        if callable(put):
+            put(
+                ctx,
+                f"{ctx.s3_raw_prefix}/rentals/{ctx.run_date.isoformat()}/file.tidy.csv",
+                df.rename(columns={"median_rent": "value"})
+                .to_csv(index=False)
+                .encode("utf-8"),
+                "text/csv",
+            )
+    return df
+
+
+def run_endpoint(
+    ctx,
+    cities: list[str] = ["Kelowna", "Vancouver", "Toronto"],
+    bedrooms: list[str] = ["overall", "1br", "2br"],
+):
+    """
+    Version B: Hit endpoint(s) via builder function (you plug in proxy), normalize, and upsert.
+    """
+
+    def rentals_url_builder(city: str, bedroom: str) -> str:
+        # You can replace this with your proxy builder
+        return f"https://example-proxy/rentals?city={city}&bedroom={bedroom}"
+
+    frames = []
+    for c in cities:
+        for b in bedrooms:
+            df = load_from_endpoint(
+                city=c,
+                bedroom_type=b,
+                date=None,  # as-of = today UTC inside helper
+                build_url=rentals_url_builder,
+                engine=ctx.engine,
+                schema="public",
+                sleep_sec=0.5,
+            )
+            frames.append(df)
+
+    out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    if not out.empty:
+        put = getattr(base, "put_raw_bytes", None)
+        if callable(put):
+            put(
+                ctx,
+                f"{ctx.s3_raw_prefix}/rentals/{ctx.run_date.isoformat()}/endpoint.tidy.csv",
+                out.rename(columns={"median_rent": "value"})
+                .to_csv(index=False)
+                .encode("utf-8"),
+                "text/csv",
+            )
+    return out

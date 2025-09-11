@@ -146,3 +146,19 @@ etl-rentals:
 # -----------------------------------
 smoke:
 	cd ml && $(PYTHON) -m pipelines.smoke_crea_to_db
+
+etl:
+\tpython -m ml.pipelines.daily_ingest --source all --date today
+
+etl-boc:
+\tpython -m ml.pipelines.daily_ingest --source boc --date today
+
+etl-statcan:
+\tpython -m ml.pipelines.daily_ingest --source statcan --date today
+
+etl-rentals-file:
+\tpython -m ml.pipelines.daily_ingest --source rentals --date today --rentals-file=data/rentals.csv
+
+etl-backfill-boc:
+\tSTART_DATE=2010-01-01 END_DATE=2025-09-01 \\
+\tpython -m ml.pipelines.daily_ingest --source boc --date 2025-09-10

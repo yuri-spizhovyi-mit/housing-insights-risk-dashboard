@@ -15,52 +15,76 @@ CMA_WHITELIST = {
 
 
 def run(ctx: Context):
-    df = download_table_csv(PID_CPI)
+    """
+    Load StatCan CPI (PID 1810000401) and upsert into public.metrics with:
+    metric = 'StatCan_CPI_AllItems'
+    city   = whitelist CMAs or 'Canada' fallback
+    """
+    pid = PID_CPI  # "1810000401"
+    alias_metric = "StatCan_CPI_AllItems"
+
+    # 1) Download full CSV and snapshot
+    df_raw = download_table_csv(pid)
     put_raw_bytes(
         ctx,
-        f"{ctx.s3_raw_prefix}/statcan/{ctx.run_date.isoformat()}/{PID_CPI}.csv",
-        df.to_csv(index=False).encode(),
+        f"{ctx.s3_raw_prefix}/statcan/{ctx.run_date.isoformat()}/{pid}.csv",
+        df_raw.to_csv(index=False).encode("utf-8"),
         "text/csv",
     )
 
-    # Common columns: REF_DATE, GEO, DGUID, UOM, UOM_ID, SCALAR_ID, VECTOR, COORDINATE, VALUE, STATUS, SYMBOL, DECIMALS
-    # Filter to All-items only, CMAs of interest
-    # There is usually a 'Products and product groups' dimension; the 'All-items' selection varies—look for a column named 'Products and product groups' or 'Products'
-    prod_col = next((c for c in df.columns if "product" in c.lower()), None)
+    # 2) Column detection (StatCan WDS varies by table but these are standard)
+    cols = {c: c for c in df_raw.columns}
+    date_col = "REF_DATE"
     geo_col = "GEO"
     value_col = "VALUE"
 
-    sel = df
-    if prod_col:
-        sel = sel[sel[prod_col].str.contains("All-items", case=False, na=False)]
+    # Optional product filter if present (keep All-items)
+    prod_cols = [c for c in df_raw.columns if "product" in c.lower()]
+    df = df_raw.copy()
+    for pc in prod_cols:
+        df = df[df[pc].astype(str).str.contains("All-items", case=False, na=False)]
 
-    # Prefer CMAs in whitelist, but if that yields nothing, fallback to national/any
-    preferred = (
-        sel[sel[geo_col].isin(CMA_WHITELIST)]
-        if geo_col in sel.columns
-        else sel.iloc[0:0]
-    )
-    if not preferred.empty:
-        sel2 = preferred
+    # 3) Whitelist CMAs + Canada fallback
+    df[geo_col] = df[geo_col].astype(str)
+    cmask = df[geo_col].isin(CMA_WHITELIST)
+    df_pref = df[cmask]
+    if df_pref.empty:
+        # Fallback to national if present; otherwise keep whatever we have
+        df_nat = df[df[geo_col].str.contains("Canada", case=False, na=False)]
+        df_sel = df_nat if not df_nat.empty else df
     else:
-        # fallback: national if available; else keep whatever we have
-        if geo_col in sel.columns:
-            national = sel[sel[geo_col].str.contains("Canada", case=False, na=False)]
-            sel2 = national if not national.empty else sel
-        else:
-            sel2 = sel
+        df_sel = df_pref
 
-    sel2 = sel2.rename(columns={"REF_DATE": "date"})
-    if geo_col in sel2.columns:
-        sel2 = sel2.rename(columns={geo_col: "city"})
-    else:
-        sel2 = sel2.assign(city="Canada")
-    sel2 = sel2.rename(columns={value_col: "value"}).assign(
-        metric="cpi_all_items", source="StatCan"
+    # 4) Normalize
+    tidy = (
+        pd.DataFrame(
+            {
+                "city": df_sel[geo_col].where(df_sel[geo_col].notna(), "Canada"),
+                "date": pd.to_datetime(df_sel[date_col], errors="coerce"),
+                "metric": alias_metric,
+                "value": pd.to_numeric(df_sel[value_col], errors="coerce"),
+                "source": f"StatCan_{pid}",
+            }
+        )
+        .dropna(subset=["date", "value"])
+        .assign(date=month_floor(lambda s=...: s["date"]) if False else month_floor)
     )
-    sel2["date"] = month_floor(sel2["date"])
-    out = sel2[["city", "date", "metric", "value", "source"]].dropna(subset=["value"])
-    base.write_df(out, "metrics", ctx)
+
+    # month_floor utility expects a Series, so do it explicitly:
+    tidy["date"] = month_floor(tidy["date"])
+
+    # 5) Idempotent upsert
+    base.write_metrics_upsert(tidy, ctx)
+
+    # Optional: snapshot tidy for auditing
+    put_raw_bytes(
+        ctx,
+        f"{ctx.s3_raw_prefix}/statcan/{ctx.run_date.isoformat()}/{pid}.tidy.csv",
+        tidy.to_csv(index=False).encode("utf-8"),
+        "text/csv",
+    )
+
+    return tidy
 
 
 # you mentioned this exists

@@ -86,27 +86,33 @@ def load_boc_series(
 
 
 def run(ctx):
-    """Smoke-run for BoC adapter: produce a tiny metrics DataFrame and write via write_df.
-
-    This avoids network during unit tests. The real ETL should call `load_boc_series`
-    with Valet series IDs and write via `base.write_df` or `base.write_metrics_upsert`.
     """
-    import datetime as _dt
-    import pandas as _pd
+    Production run: fetch BoC Valet series and upsert into public.metrics.
+    Uses optional START_DATE / END_DATE (YYYY-MM-DD) from env for backfills.
+    """
+    import os
 
-    today = _dt.date.today()
-    # Example synthetic data; replace with live series when running in pipeline
-    df = _pd.DataFrame(
-        {
-            "metric": ["BoC_OvernightRate", "BoC_OvernightRate"],
-            "city": ["Canada", "Canada"],
-            "date": [
-                _pd.to_datetime(today).date(),
-                _pd.to_datetime(today.replace(day=1)).date(),
-            ],
-            "value": [5.00, 5.00],
-            "source": [DEFAULT_SOURCE, DEFAULT_SOURCE],
-        }
+    series_ids = ["V39079"]
+    alias = {"V39079": "BoC_OvernightRate"}
+
+    # Optional backfill window via env
+    start_date = os.getenv("START_DATE")  # e.g., "2010-01-01"
+    end_date = os.getenv("END_DATE")  # e.g., "2025-09-01"
+
+    df = load_boc_series(
+        series_ids=series_ids,
+        engine=ctx.engine,  # uses your SQLAlchemy engine property
+        schema="public",
+        alias=alias,
+        start_date=start_date,
+        end_date=end_date,
     )
-    base.write_df(df, "metrics", ctx)
+
+    # Optional: snapshot the tidy frame to raw/ for auditing (CSV)
+    if df is not None and not df.empty:
+        path = f"{ctx.s3_raw_prefix}/boc/{ctx.run_date.isoformat()}/V39079.tidy.csv"
+        put = getattr(base, "put_raw_bytes", None)
+        if callable(put):
+            put(ctx, path, df.to_csv(index=False).encode("utf-8"), "text/csv")
+
     return df
