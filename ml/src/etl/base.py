@@ -246,7 +246,7 @@ def write_hpi_upsert(df: pd.DataFrame, ctx: "Context") -> None:
 
 
 def write_rents_upsert(
-    df: pd.DataFrame, engine: Engine, schema: Optional[str] = "public"
+    df: pd.DataFrame, ctx_or_engine, schema: Optional[str] = "public"
 ) -> None:
     """
     Upsert into rents(city, "date", bedroom_type, median_rent, source)
@@ -293,5 +293,13 @@ def write_rents_upsert(
             source = EXCLUDED.source
     """)
 
-    with engine.begin() as conn:
+    eng = _resolve_engine(ctx_or_engine)  # accepts Context or Engine
+    with eng.begin() as conn:
         conn.execute(sql, rows)
+
+
+def get_session(ctx: Optional[Context] = None):
+    """Return a basic HTTP session. Extend here if you need proxies/headers."""
+    import requests
+
+    return requests.Session()
