@@ -150,7 +150,6 @@ def run(ctx: base.Context):
 
     # Write using generic writer so tests can intercept table "metrics"
     base.write_df(df, "metrics", ctx)
-
     # Optional snapshot to raw
     if df is not None and not df.empty:
         put = getattr(base, "put_raw_bytes", None)
