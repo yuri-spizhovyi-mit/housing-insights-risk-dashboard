@@ -1,6 +1,7 @@
 import pandas as pd
 from . import base
 from .statcan_wds import download_table_csv
+from .utils import canonical_geo
 
 # Use either table number OR 8-digit ProductId:
 PID = "34-10-0145-01"  # will normalize to '34100145'
@@ -20,6 +21,9 @@ def _tidy(df: pd.DataFrame) -> pd.DataFrame:
     )
     if not (date_col and geo_col and val_col):
         return pd.DataFrame(columns=["metric", "city", "date", "value", "source"])
+    from .utils import canonical_geo
+
+    df[geo_col] = df[geo_col].apply(lambda x: canonical_geo(x) or "OTHER")
 
     tidy = pd.DataFrame(
         {
@@ -30,6 +34,9 @@ def _tidy(df: pd.DataFrame) -> pd.DataFrame:
             "source": "StatCan/CMHC",
         }
     ).dropna(subset=["city", "date", "value"])
+
+    # Keep only our target geographies
+    tidy = tidy[tidy["city"].isin(["Kelowna", "Vancouver", "Toronto", "Canada"])]
 
     return tidy
 

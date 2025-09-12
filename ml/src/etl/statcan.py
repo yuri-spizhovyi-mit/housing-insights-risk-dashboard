@@ -4,6 +4,7 @@ import pandas as pd
 from .base import Context, month_floor, put_raw_bytes
 from .statcan_wds import download_table_csv
 from . import base
+from .utils import canonical_geo
 
 PID_CPI = "1810000401"  # 18-10-0004-01
 
@@ -54,7 +55,9 @@ def run(ctx: Context):
         df_sel = df_nat if not df_nat.empty else df
     else:
         df_sel = df_pref
-
+    # Canonicalize selected geographies and keep only target cities
+    df_sel[geo_col] = df_sel[geo_col].apply(lambda x: canonical_geo(x) or "OTHER")
+    df_sel = df_sel[df_sel[geo_col].isin(["Kelowna", "Vancouver", "Toronto", "Canada"])]
     # 4) Normalize
     tidy = pd.DataFrame(
         {

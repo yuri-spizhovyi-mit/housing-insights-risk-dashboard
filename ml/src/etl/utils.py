@@ -55,20 +55,24 @@ def _norm(s: str) -> str:
     return s
 
 
-def canonical_geo(
-    geo: str, dguid: str | None = None, code_map: dict[str, str] | None = None
-) -> str | None:
-    # 1) prefer codes if provided
-    if dguid and code_map and dguid in code_map:
-        return code_map[dguid]
+def canonical_geo(raw: str) -> str | None:
+    if not raw:
+        return None
+    s = str(raw).lower().strip()
+    s = s.replace("cma", "").replace("ca", "")
+    s = s.replace(", british columbia", "").replace(", ontario", "")
+    s = s.replace(" census metropolitan area", "").replace(" census agglomeration", "")
+    s = s.strip()
 
-    g = _norm(geo)
-    if g in SYNONYMS:
-        g = SYNONYMS[g]
-    if g in CANON:
-        return CANON[g]  # Kelowna/Vancouver/Toronto/Canada
-    if g in PROVINCES:
-        return g.title()  # Keep provinces if you want them
-    if "canada" in g:
-        return "Canada"  # any variant including 'canada'
-    return None  # not in our list
+    if "kelowna" in s:
+        return "Kelowna"
+    if "vancouver" in s:
+        return "Vancouver"
+    if "toronto" in s:
+        return "Toronto"
+    if "canada" in s:
+        return "Canada"
+    return None
+
+
+# not in our list
