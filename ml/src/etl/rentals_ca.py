@@ -1,258 +1,448 @@
-# rentals_ca.py
-from typing import Iterable, Dict, Optional, Callable, Any, List
-import time
+# ml/src/etl/rentals_ca.py
+from __future__ import annotations
+
+import io
+import os
+import re
+import json
+import logging
+import datetime as dt
+from typing import Optional, Tuple
+
 import pandas as pd
 import requests
 
-from . import base
+from . import base  # your shared ETL helpers (Session, S3/MinIO utils, DB writers, Context, etc.)
 
-DEFAULT_SOURCE = "Rentals.ca"
+# -----------------------------
+# Config
+# -----------------------------
+SOURCE_NAME = "Rentals.ca"
+
+# Canonical set we keep in the DB
+TARGET_CITIES = {"Kelowna", "Vancouver", "Toronto"}
+
+# Common bedroom labels we’ll normalize to {0BR, 1BR, 2BR, 3BR, 4BR+}
+BEDROOM_MAP = {
+    # studio / bachelor
+    "studio": "0BR",
+    "bachelor": "0BR",
+    "0": "0BR",
+    "0 br": "0BR",
+    "0br": "0BR",
+    "0-bedroom": "0BR",
+    "0 bedroom": "0BR",
+    # 1+
+    "1": "1BR",
+    "1 br": "1BR",
+    "1br": "1BR",
+    "1-bedroom": "1BR",
+    "1 bedroom": "1BR",
+    "one bedroom": "1BR",
+    # 2
+    "2": "2BR",
+    "2 br": "2BR",
+    "2br": "2BR",
+    "2-bedroom": "2BR",
+    "2 bedroom": "2BR",
+    "two bedroom": "2BR",
+    # 3
+    "3": "3BR",
+    "3 br": "3BR",
+    "3br": "3BR",
+    "3-bedroom": "3BR",
+    "3 bedroom": "3BR",
+    "three bedroom": "3BR",
+    # 4+
+    "4": "4BR+",
+    "4 br": "4BR+",
+    "4br": "4BR+",
+    "4-bedroom": "4BR+",
+    "4 bedroom": "4BR+",
+    "four bedroom": "4BR+",
+    "5": "4BR+",
+    "5 br": "4BR+",
+    "5br": "4BR+",
+    "5-bedroom": "4BR+",
+    "5 bedroom": "4BR+",
+    "five bedroom": "4BR+",
+}
+
+# City normalization to our canonical set
+CITY_MAP = {
+    # typical variants seen in reports
+    "vancouver, bc": "Vancouver",
+    "city of vancouver": "Vancouver",
+    "vancouver": "Vancouver",
+    "toronto, on": "Toronto",
+    "city of toronto": "Toronto",
+    "toronto": "Toronto",
+    "kelowna, bc": "Kelowna",
+    "kelowna": "Kelowna",
+}
+
+# Where to snapshot raw files in MinIO
+RAW_BUCKET = os.getenv("RAW_BUCKET", "raw")
+RAW_PREFIX = "rentals_ca"  # becomes raw/rentals_ca/...
 
 
-def _safe_get(
-    url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 20
-) -> Optional[dict]:
-    try:
-        r = requests.get(
-            url,
-            headers=headers
-            or {
-                "Accept": "application/json, text/plain, */*",
-                "User-Agent": "Mozilla/5.0 (compatible; ETL/1.0)",
-                "Referer": "https://www.rentals.ca/",
-            },
-            timeout=timeout,
+# -----------------------------
+# Public entrypoint
+# -----------------------------
+def run(ctx: base.Context) -> pd.DataFrame:
+    """
+    Downloads real Rentals.ca data (CSV/Excel or endpoint), snapshots raw into MinIO,
+    normalizes to (city, date, bedroom_type, median_rent, source), and performs
+    an idempotent upsert into Postgres public.rents.
+
+    Returns the tidy DataFrame that was written.
+    """
+    log = logging.getLogger(__name__)
+    session = base.get_session(ctx)  # your shared requests.Session with retries/timeouts
+
+    # --- CHOOSE ONE LOADER ---
+    # 1) If you already have a local CSV/Excel file (manually downloaded)
+    #    put its path into ctx.params.get("rentals_ca_path"), e.g. data/raw/rentals_2025-08.csv
+    local_path = (ctx.params or {}).get("rentals_ca_path")
+
+    # 2) Or specify a direct CSV/XLSX URL via ctx.params["rentals_ca_url"]
+    csv_url = (ctx.params or {}).get("rentals_ca_url")
+
+    # 3) Or later plug your private/proxy API into load_from_endpoint()
+    endpoint_url = (ctx.params or {}).get("rentals_ca_endpoint")
+
+    raw_bytes: Optional[bytes] = None
+    raw_name: Optional[str] = None
+    content_type: Optional[str] = None
+
+    if local_path:
+        raw_bytes, raw_name, content_type = load_from_file(local_path)
+    elif csv_url:
+        raw_bytes, raw_name, content_type = load_via_http(session, csv_url)
+    elif endpoint_url:
+        raw_bytes, raw_name, content_type = load_from_endpoint(session, endpoint_url)
+    else:
+        # Fallback: raise a helpful error so this never silently uses synthetic data
+        raise RuntimeError(
+            "No Rentals.ca source configured. "
+            "Provide one of: ctx.params['rentals_ca_path'] (local CSV/XLSX), "
+            "ctx.params['rentals_ca_url'] (HTTP CSV/XLSX), or "
+            "ctx.params['rentals_ca_endpoint'] (API/JSON)."
         )
-        if r.status_code == 200:
-            return r.json()
-        return None
-    except requests.RequestException:
-        return None
 
+    # Snapshot raw → MinIO (best-effort)
+    try:
+        snapshot_key = snapshot_raw_to_minio(ctx, raw_bytes, raw_name, content_type)
+        if snapshot_key:
+            log.info("Snapshotted raw Rentals.ca to minio://%s/%s", RAW_BUCKET, snapshot_key)
+    except Exception as e:
+        log.warning("Failed to snapshot Rentals.ca raw to MinIO (continuing): %s", e)
 
-def _normalize_rentals_json(
-    items: List[Dict[str, Any]], city: str, bedroom_type: str, date: pd.Timestamp
-) -> pd.DataFrame:
-    """
-    Normalize a list of rental observations (already filtered/aggregated)
-    into rents table shape.
-    """
-    # Expect items like [{"value": 2150}] or any shape where average rent is present.
-    # Customize the path to value if needed.
-    vals = []
-    for it in items:
-        # You may adjust key names depending on your endpoint.
-        # Try keys in order of preference:
-        for key in ("average_rent", "avgRent", "value", "avg_price"):
-            if key in it and isinstance(it[key], (int, float)):
-                vals.append(float(it[key]))
-                break
-    if not vals:
-        return pd.DataFrame()
+    # Parse & normalize
+    tidy = normalize_to_rents(raw_bytes, raw_name, content_type, ctx)
 
-    df = pd.DataFrame(
-        {
-            "city": [city] * len(vals),
-            "date": [date] * len(vals),
-            "bedroom_type": [bedroom_type] * len(vals),
-            "value": vals,
-            "source": DEFAULT_SOURCE,
-        }
-    )
-    # If multiple values in one day, keep mean
-    df = df.groupby(["city", "date", "bedroom_type", "source"], as_index=False)[
-        "value"
-    ].mean()
-    return df
+    # Persist
+    base.write_rents_upsert(tidy, ctx)
 
-
-def load_from_endpoint(
-    city: str,
-    bedroom_type: str,
-    date: Optional[pd.Timestamp],
-    build_url: Callable[[str, str], str],
-    engine,
-    schema: str = "public",
-    sleep_sec: float = 0.75,
-) -> pd.DataFrame:
-    """
-    Hit a (possibly private/proxied) endpoint that returns summary stats for a (city, bedroom).
-    - build_url(city, bedroom_type) should return a URL string.
-    - date: the 'as_of' date to record; if None, use today (UTC).
-    """
-    as_of = pd.Timestamp.utcnow().normalize() if date is None else pd.to_datetime(date)
-    url = build_url(city, bedroom_type)
-    data = _safe_get(url)
-    if data is None:
-        return pd.DataFrame()
-
-    # Adjust this selection to your endpoint structure:
-    # Example: data = {"rows":[{"avgRent": 2200}, ...]}
-    rows = data.get("rows") or data.get("data") or data.get("items") or []
-    tidy = _normalize_rentals_json(rows, city, bedroom_type, as_of)
-    if not tidy.empty:
-        base.write_rents_upsert(tidy, engine, schema=schema)
-    time.sleep(sleep_sec)  # be polite
+    log.info("Wrote %d Rentals.ca rows to public.rents", len(tidy))
     return tidy
 
 
-def load_from_file(
-    path: str,
-    city_map: Dict[str, str],
-    bedroom_map: Dict[str, str],
-    date_field: str,
-    price_field: str,
-    engine=None,
-    schema: str = "public",
-) -> pd.DataFrame:
+# -----------------------------
+# Loaders (CSV/Excel/Endpoint)
+# -----------------------------
+def load_from_file(path: str) -> Tuple[bytes, str, str]:
+    with open(path, "rb") as f:
+        raw = f.read()
+    name = os.path.basename(path)
+    content_type = guess_content_type(name)
+    return raw, name, content_type
+
+
+def load_via_http(session: requests.Session, url: str) -> Tuple[bytes, str, str]:
+    resp = session.get(url, timeout=60)
+    resp.raise_for_status()
+    # try to get a file-ish name
+    name = _filename_from_headers_or_url(resp.headers, url)
+    return resp.content, name, resp.headers.get("Content-Type") or guess_content_type(name)
+
+
+def load_from_endpoint(session: requests.Session, url: str) -> Tuple[bytes, str, str]:
     """
-    Fallback loader for CSV/JSON you’ve pre-downloaded (e.g., monthly report extract).
-    Expects columns including: city name, bedroom type, date_field, price_field.
-    City and bedroom values are normalized via the provided maps.
+    Stub for a JSON/API response (e.g., from a proxy or partner).
+    Shape this to return the raw payload. normalize_to_rents() will handle CSV/Excel/JSON.
     """
-    if path.lower().endswith(".csv"):
-        raw = pd.read_csv(path)
-    else:
-        raw = pd.read_json(path)
-
-    # Required columns check is flexible; you map them below.
-    # Example: raw has columns ["City","Bedroom","Month","AverageRent"]
-    # Map to canonical
-    df = pd.DataFrame(
-        {
-            "city": raw["City"].map(city_map).fillna(raw["City"]),
-            "bedroom_type": raw["Bedroom"].map(bedroom_map).fillna(raw["Bedroom"]),
-            "date": pd.to_datetime(raw[date_field], errors="coerce"),
-            "value": pd.to_numeric(raw[price_field], errors="coerce"),
-            "source": DEFAULT_SOURCE,
-        }
-    ).dropna(subset=["date", "value"])
-
-    df["date"] = df["date"].dt.date
-    if engine is not None:
-        base.write_rents_upsert(df, engine, schema=schema)
-    return df
+    resp = session.get(url, timeout=60)
+    resp.raise_for_status()
+    # We store the *raw* JSON text as our snapshot
+    raw = resp.content
+    name = f"rentals_ca_endpoint_{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}.json"
+    return raw, name, "application/json"
 
 
-def run(ctx):
+# -----------------------------
+# Normalization
+# -----------------------------
+def normalize_to_rents(raw: bytes, name: str, content_type: str, ctx: base.Context) -> pd.DataFrame:
     """
-    Rentals.ca production-friendly run:
-    - Build or fetch a tidy DataFrame with columns:
+    Accepts CSV/Excel/JSON bytes; returns tidy DataFrame with columns:
       city, date, bedroom_type, median_rent, source
-    - UPSERT into public.rents (PK: city, "date", bedroom_type)
+    Filters to TARGET_CITIES and to the run month (if the file encodes a single month)
+    or uses the per-row month when available.
     """
-    import datetime as _dt
-    import pandas as _pd
+    # 1) Parse to a raw DataFrame
+    if content_type.startswith("application/json") or name.lower().endswith(".json"):
+        df = _parse_json(raw)
+    elif content_type in ("application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") or name.lower().endswith((".xls", ".xlsx")):
+        df = _parse_excel(raw)
+    else:
+        # default to CSV/TSV
+        df = _parse_csv(raw)
 
-    today = _dt.date.today()
+    if df.empty:
+        raise ValueError(f"Parsed an empty Rentals.ca DataFrame from {name}")
 
-    # Example synthetic frame. Replace with load_from_endpoint(...) or load_from_file(...)
-    df = _pd.DataFrame(
-        {
-            "city": ["Kelowna", "Kelowna", "Vancouver"],
-            "date": [_pd.to_datetime(today).date()] * 3,
-            "bedroom_type": ["1BR", "2BR", "1BR"],
-            # If you currently compute 'value', you can keep it and we'll rename:
-            "median_rent": [2300.0, 2800.0, 3100.0],
-            "source": [DEFAULT_SOURCE] * 3,
-        }
+    # 2) Standardize columns (robust column finders)
+    col_city = _first_present(df.columns, ["city", "location", "market", "metro"])
+    col_bed  = _first_present(df.columns, ["bedroom", "bedrooms", "bedroom_type", "type"])
+    col_med  = _first_present(df.columns, ["median_rent", "median", "median rent", "median_rent_$", "median ($)"])
+    col_avg  = _first_present(df.columns, ["average_rent", "avg", "average rent", "avg_rent", "average_rent_$"])
+    col_month = _first_present(df.columns, ["month", "date", "period"])
+
+    if not col_med and not col_avg:
+        raise ValueError(
+            "Could not find a median or average rent column in Rentals.ca file. "
+            "Looked for: median_rent/median/average_rent/avg"
+        )
+
+    # 3) Build working DF with best available rent metric (prefer median; fallback to average)
+    rent_col = col_med or col_avg
+    work = df[[c for c in [col_city, col_bed, rent_col, col_month] if c is not None]].copy()
+    work.columns = ["city_raw", "bedraw", "rent_raw"][: len(work.columns)] + (["month_raw"] if col_month else [])
+
+    # 4) Normalize bedrooms → our canonical labels
+    work["bedroom_type"] = (
+        work["bedraw"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .map(BEDROOM_MAP)
+        .fillna(
+            work["bedraw"]
+            .astype(str)
+            .str.extract(r"(\d+)")[0]  # try to capture a digit
+            .map({"0": "0BR", "1": "1BR", "2": "2BR", "3": "3BR", "4": "4BR+"})
+        )
     )
+    work = work.dropna(subset=["bedroom_type"])
 
-    # Safety: if some upstream path still produces 'value', map it:
-    if "median_rent" not in df.columns and "value" in df.columns:
-        df = df.rename(columns={"value": "median_rent"})
-
-    base.write_df(df, "rents", ctx)
-    return {"rents": df}
-
-
-def run_file(
-    ctx,
-    path="data/rentals.csv",
-    city_map: Optional[Dict[str, str]] = None,
-    bedroom_map: Optional[Dict[str, str]] = None,
-    date_field: str = "Month",
-    price_field: str = "AverageRent",
-):
-    """
-    Version A: Load from local CSV/JSON, normalize, snapshot, and upsert into rents.
-    """
-    city_map = city_map or {
-        "Kelowna": "Kelowna",
-        "Vancouver": "Vancouver",
-        "Toronto": "Toronto",
-    }
-    bedroom_map = bedroom_map or {
-        "overall": "overall",
-        "0br": "0BR",
-        "1br": "1BR",
-        "2br": "2BR",
-        "3br": "3BR",
-    }
-
-    df = load_from_file(
-        path=path,
-        engine=ctx.engine,
-        schema="public",
-        date_field=date_field,
-        price_field=price_field,
-        city_map=city_map,
-        bedroom_map=bedroom_map,
+    # 5) Normalize city → canonical + filter to our target set
+    work["city"] = (
+        work["city_raw"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .map(CITY_MAP)
+        .fillna(work["city_raw"].astype(str).str.strip().str.title())  # graceful fallback
     )
+    work = work[work["city"].isin(TARGET_CITIES)]
 
-    # Snapshot tidy to raw/
-    if df is not None and not df.empty:
-        put = getattr(base, "put_raw_bytes", None)
-        if callable(put):
-            put(
-                ctx,
-                f"{ctx.s3_raw_prefix}/rentals/{ctx.run_date.isoformat()}/file.tidy.csv",
-                df.rename(columns={"median_rent": "value"})
-                .to_csv(index=False)
-                .encode("utf-8"),
-                "text/csv",
-            )
-    return df
+    # 6) Derive month (first of month)
+    if "month_raw" in work.columns:
+        work["date"] = work["month_raw"].apply(_coerce_month_start)
+    else:
+        # Try to infer from filename (e.g., rentals_2025-08.csv or 2025_08)
+        inferred = _infer_month_from_name(name)
+        if inferred is None:
+            # fallback to run month in context (use previous month—it’s typical for rent reports)
+            run_date = getattr(ctx, "run_date", dt.date.today())
+            inferred = (run_date.replace(day=1) - dt.timedelta(days=1)).replace(day=1)
+        work["date"] = inferred
+
+    # 7) numeric rent
+    work["median_rent"] = pd.to_numeric(work["rent_raw"], errors="coerce")
+    work = work.dropna(subset=["median_rent"])
+
+    # 8) final shape
+    tidy = work[["city", "date", "bedroom_type", "median_rent"]].copy()
+    tidy["source"] = SOURCE_NAME
+
+    # 9) (Optional) collapse very large bedrooms to 4BR+
+    tidy.loc[tidy["bedroom_type"].isin(["5BR", "6BR", "7BR"]), "bedroom_type"] = "4BR+"
+
+    # 10) de-dup (idempotent)
+    tidy = (
+        tidy.sort_values(["city", "date", "bedroom_type"])
+        .drop_duplicates(subset=["city", "date", "bedroom_type"], keep="last")
+        .reset_index(drop=True)
+    )
+    return tidy
 
 
-def run_endpoint(
-    ctx,
-    cities: list[str] = ["Kelowna", "Vancouver", "Toronto"],
-    bedrooms: list[str] = ["overall", "1br", "2br"],
-):
+# -----------------------------
+# Raw snapshot to MinIO (best-effort)
+# -----------------------------
+def snapshot_raw_to_minio(ctx: base.Context, raw: bytes, name: str, content_type: str) -> Optional[str]:
     """
-    Version B: Hit endpoint(s) via builder function (you plug in proxy), normalize, and upsert.
+    Attempts to write the raw payload to MinIO/S3. This is best-effort and will not
+    fail the run if the client isn’t available. Returns the object key on success.
     """
+    ts = dt.datetime.utcnow()
+    yyyymm = ts.strftime("%Y-%m")
+    key = f"{RAW_PREFIX}/{yyyymm}/{name}"
 
-    def rentals_url_builder(city: str, bedroom: str) -> str:
-        # You can replace this with your proxy builder
-        return f"https://example-proxy/rentals?city={city}&bedroom={bedroom}"
+    # Preferred: if your project exposes a helper (uncomment if you have it)
+    # return base.snapshot_raw(ctx, bucket=RAW_BUCKET, key=key, data=raw, content_type=content_type)
 
-    frames = []
-    for c in cities:
-        for b in bedrooms:
-            df = load_from_endpoint(
-                city=c,
-                bedroom_type=b,
-                date=None,  # as-of = today UTC inside helper
-                build_url=rentals_url_builder,
-                engine=ctx.engine,
-                schema="public",
-                sleep_sec=0.5,
-            )
-            frames.append(df)
+    # Generic attempt through a client on Context (minio or s3)
+    client = getattr(ctx, "minio", None) or getattr(ctx, "s3", None)
+    if client:
+        # minio client typically: put_object(bucket, key, data, length, content_type=...)
+        try:
+            buf = io.BytesIO(raw)
+            length = len(raw)
+            if hasattr(client, "put_object"):
+                client.put_object(RAW_BUCKET, key, buf, length, content_type=content_type or "application/octet-stream")
+                return key
+        except Exception as e:
+            logging.getLogger(__name__).warning("MinIO put_object failed: %s", e)
 
-    out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    # If the project has a filesystem staging, use it (optional)
+    try:
+        local_raw_dir = os.path.join(ctx.workdir if hasattr(ctx, "workdir") else ".", "raw_snapshots", RAW_PREFIX, yyyymm)
+        os.makedirs(local_raw_dir, exist_ok=True)
+        with open(os.path.join(local_raw_dir, name), "wb") as f:
+            f.write(raw)
+        return f"{RAW_PREFIX}/{yyyymm}/{name}"
+    except Exception:
+        pass
 
-    if not out.empty:
-        put = getattr(base, "put_raw_bytes", None)
-        if callable(put):
-            put(
-                ctx,
-                f"{ctx.s3_raw_prefix}/rentals/{ctx.run_date.isoformat()}/endpoint.tidy.csv",
-                out.rename(columns={"median_rent": "value"})
-                .to_csv(index=False)
-                .encode("utf-8"),
-                "text/csv",
-            )
-    return out
+    return None
+
+
+# -----------------------------
+# Parsers
+# -----------------------------
+def _parse_csv(raw: bytes) -> pd.DataFrame:
+    # Try comma, then semicolon/TSV
+    try:
+        return pd.read_csv(io.BytesIO(raw))
+    except Exception:
+        try:
+            return pd.read_csv(io.BytesIO(raw), sep=";")
+        except Exception:
+            return pd.read_csv(io.BytesIO(raw), sep="\t")
+
+
+def _parse_excel(raw: bytes) -> pd.DataFrame:
+    return pd.read_excel(io.BytesIO(raw))
+
+
+def _parse_json(raw: bytes) -> pd.DataFrame:
+    payload = json.loads(raw.decode("utf-8"))
+    # Accept either list-of-objects or {"data": [...]} shells
+    if isinstance(payload, dict):
+        records = payload.get("data", payload.get("rows", payload))
+        if isinstance(records, dict):
+            # if it's still a dict, try any first list
+            for v in records.values():
+                if isinstance(v, list):
+                    records = v
+                    break
+    else:
+        records = payload
+    return pd.json_normalize(records)
+
+
+# -----------------------------
+# Utilities
+# -----------------------------
+def _first_present(columns, candidates):
+    cols_norm = {str(c).strip().lower(): c for c in columns}
+    for cand in candidates:
+        key = cand.lower()
+        if key in cols_norm:
+            return cols_norm[key]
+    return None
+
+
+def _coerce_month_start(x) -> dt.date:
+    """
+    Accepts formats like:
+      - 2025-08
+      - 2025-08-01
+      - Aug 2025 / August 2025
+      - 2025/08
+    Returns date(...) set to first day of the month.
+    """
+    if pd.isna(x):
+        return None
+    s = str(x).strip()
+
+    # ISO-like
+    m = re.match(r"^\s*(\d{4})[-/](\d{1,2})(?:[-/](\d{1,2}))?\s*$", s)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        return dt.date(y, mo, 1)
+
+    # Month name + year
+    try:
+        dtm = pd.to_datetime(s, errors="raise")
+        return dt.date(dtm.year, dtm.month, 1)
+    except Exception:
+        pass
+
+    # Excel serial?
+    try:
+        dtm = pd.to_datetime(float(s), unit="d", origin="1899-12-30", errors="raise")
+        return dt.date(dtm.year, dtm.month, 1)
+    except Exception:
+        pass
+
+    # If completely unknown, try today’s month
+    today = dt.date.today()
+    return dt.date(today.year, today.month, 1)
+
+
+def _infer_month_from_name(name: str) -> Optional[dt.date]:
+    """
+    Tries to extract YYYY-MM or YYYY_MM from filename.
+    """
+    s = name.lower()
+    m = re.search(r"(20\d{2})[-_](0?[1-9]|1[0-2])", s)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        return dt.date(y, mo, 1)
+    # Also try month names
+    month_map = {m.lower(): i for i, m in enumerate(["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], start=1)}
+    m2 = re.search(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[_-]?(20\d{2})", s)
+    if m2:
+        mo = month_map[m2.group(1)]
+        y = int(m2.group(2))
+        return dt.date(y, mo, 1)
+    return None
+
+
+def guess_content_type(filename: str) -> str:
+    fn = filename.lower()
+    if fn.endswith(".xlsx"):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    if fn.endswith(".xls"):
+        return "application/vnd.ms-excel"
+    if fn.endswith(".json"):
+        return "application/json"
+    if fn.endswith(".csv"):
+        return "text/csv"
+    if fn.endswith(".tsv"):
+        return "text/tab-separated-values"
+    return "application/octet-stream"
+
+
+def _filename_from_headers_or_url(headers, url: str) -> str:
+    cd = headers.get("Content-Disposition", "")
+    m = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)"?', cd)
+    if m:
+        return m.group(1)
+    # fallback to URL tail
+    tail = url.split("?")[0].rstrip("/").split("/")[-1]
+    return tail or f"rentals_ca_{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv"
