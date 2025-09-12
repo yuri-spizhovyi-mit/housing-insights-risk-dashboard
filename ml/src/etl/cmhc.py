@@ -25,7 +25,7 @@ def _tidy(df: pd.DataFrame) -> pd.DataFrame:
 
     df[geo_col] = df[geo_col].apply(lambda x: canonical_geo(x) or "OTHER")
 
-    tidy = pd.DataFrame(
+    tidy_full = pd.DataFrame(
         {
             "metric": "CMHC_Series",
             "city": df[geo_col].astype("string").str.strip(),
@@ -35,8 +35,11 @@ def _tidy(df: pd.DataFrame) -> pd.DataFrame:
         }
     ).dropna(subset=["city", "date", "value"])
 
-    # Keep only our target geographies
-    tidy = tidy[tidy["city"].isin(["Kelowna", "Vancouver", "Toronto", "Canada"])]
+    # Keep only our target geographies; if empty, fall back to national or unfiltered
+    tidy = tidy_full[tidy_full["city"].isin(["Kelowna", "Vancouver", "Toronto", "Canada"])]
+    if tidy.empty:
+        fallback = tidy_full[tidy_full["city"] == "Canada"]
+        tidy = fallback if not fallback.empty else tidy_full
 
     return tidy
 

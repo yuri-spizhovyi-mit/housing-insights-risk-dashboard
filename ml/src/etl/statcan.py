@@ -56,8 +56,16 @@ def run(ctx: Context):
     else:
         df_sel = df_pref
     # Canonicalize selected geographies and keep only target cities
-    df_sel[geo_col] = df_sel[geo_col].apply(lambda x: canonical_geo(x) or "OTHER")
-    df_sel = df_sel[df_sel[geo_col].isin(["Kelowna", "Vancouver", "Toronto", "Canada"])]
+    # Work on a copy to avoid chained assignment warnings
+    df_sel = df_sel.copy()
+    df_sel.loc[:, geo_col] = df_sel[geo_col].apply(lambda x: canonical_geo(x) or "OTHER")
+    # Filter to target geographies; if empty, fall back to national or unfiltered
+    filtered = df_sel[df_sel[geo_col].isin(["Kelowna", "Vancouver", "Toronto", "Canada"])]
+    if filtered.empty:
+        df_nat = df_sel[df_sel[geo_col] == "Canada"]
+        df_sel = df_nat if not df_nat.empty else df_sel
+    else:
+        df_sel = filtered
     # 4) Normalize
     tidy = pd.DataFrame(
         {
