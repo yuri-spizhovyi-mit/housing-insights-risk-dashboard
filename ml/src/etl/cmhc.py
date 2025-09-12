@@ -36,7 +36,9 @@ def _tidy(df: pd.DataFrame) -> pd.DataFrame:
     ).dropna(subset=["city", "date", "value"])
 
     # Keep only our target geographies; if empty, fall back to national or unfiltered
-    tidy = tidy_full[tidy_full["city"].isin(["Kelowna", "Vancouver", "Toronto", "Canada"])]
+    tidy = tidy_full[
+        tidy_full["city"].isin(["Kelowna", "Vancouver", "Toronto", "Canada"])
+    ]
     if tidy.empty:
         fallback = tidy_full[tidy_full["city"] == "Canada"]
         tidy = fallback if not fallback.empty else tidy_full

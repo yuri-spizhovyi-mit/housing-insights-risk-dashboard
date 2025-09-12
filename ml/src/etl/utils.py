@@ -18,8 +18,10 @@ _PROVINCES = (
 
 _SUFFIXES = r"(cma|ca|census metropolitan area|census agglomeration)"
 
+
 def _strip_accents(s: str) -> str:
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+
 
 def _clean(s: str) -> str:
     s = _strip_accents(str(s)).lower().strip()
@@ -30,6 +32,7 @@ def _clean(s: str) -> str:
     # drop province tail after comma
     s = re.sub(rf",\s*({_PROVINCES})\b", "", s)
     return s.strip()
+
 
 def canonical_geo(raw: Optional[str]) -> Optional[str]:
     """
