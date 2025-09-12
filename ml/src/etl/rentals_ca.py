@@ -12,7 +12,9 @@ from typing import Optional, Tuple
 import pandas as pd
 import requests
 
-from . import base  # your shared ETL helpers (Session, S3/MinIO utils, DB writers, Context, etc.)
+from . import (
+    base,
+)  # your shared ETL helpers (Session, S3/MinIO utils, DB writers, Context, etc.)
 
 # -----------------------------
 # Config
@@ -89,27 +91,24 @@ RAW_PREFIX = "rentals_ca"  # becomes raw/rentals_ca/...
 # -----------------------------
 # Public entrypoint
 # -----------------------------
+# ... keep the imports and constants from the previous version ...
+DISCOVERY_START_URL = "https://rentals.ca/national-rent-report"
+ARCHIVE_URL = "https://rentals.ca/blog/canada-national-rent-reports"  # archive hub
+
+AUTO_LOOKBACK_POSTS = 6  # how many recent archive posts to scan for CSV/XLSX
+
+
 def run(ctx: base.Context) -> pd.DataFrame:
-    """
-    Downloads real Rentals.ca data (CSV/Excel or endpoint), snapshots raw into MinIO,
-    normalizes to (city, date, bedroom_type, median_rent, source), and performs
-    an idempotent upsert into Postgres public.rents.
-
-    Returns the tidy DataFrame that was written.
-    """
     log = logging.getLogger(__name__)
-    session = base.get_session(ctx)  # your shared requests.Session with retries/timeouts
+    session = base.get_session(ctx)
 
-    # --- CHOOSE ONE LOADER ---
-    # 1) If you already have a local CSV/Excel file (manually downloaded)
-    #    put its path into ctx.params.get("rentals_ca_path"), e.g. data/raw/rentals_2025-08.csv
-    local_path = (ctx.params or {}).get("rentals_ca_path")
-
-    # 2) Or specify a direct CSV/XLSX URL via ctx.params["rentals_ca_url"]
-    csv_url = (ctx.params or {}).get("rentals_ca_url")
-
-    # 3) Or later plug your private/proxy API into load_from_endpoint()
-    endpoint_url = (ctx.params or {}).get("rentals_ca_endpoint")
+    params = ctx.params or {}
+    local_path = params.get("rentals_ca_path")
+    csv_url = params.get("rentals_ca_url")
+    endpoint_url = params.get("rentals_ca_endpoint")
+    auto = params.get("rentals_ca_auto", True) and not any(
+        [local_path, csv_url, endpoint_url]
+    )
 
     raw_bytes: Optional[bytes] = None
     raw_name: Optional[str] = None
@@ -121,31 +120,125 @@ def run(ctx: base.Context) -> pd.DataFrame:
         raw_bytes, raw_name, content_type = load_via_http(session, csv_url)
     elif endpoint_url:
         raw_bytes, raw_name, content_type = load_from_endpoint(session, endpoint_url)
+    elif auto:
+        # NEW: Automatic discovery of CSV/XLSX assets from the latest report(s)
+        discovered_url = discover_latest_tabular_asset(session)
+        if not discovered_url:
+            raise RuntimeError(
+                "Could not automatically find a CSV/XLSX on Rentals.ca’s latest report pages. "
+                "Pass ctx.params['rentals_ca_url'] to a known CSV/XLSX or use rentals_ca_path "
+                "for a local file. You can also wire rentals_ca_endpoint for JSON."
+            )
+        raw_bytes, raw_name, content_type = load_via_http(session, discovered_url)
     else:
-        # Fallback: raise a helpful error so this never silently uses synthetic data
         raise RuntimeError(
-            "No Rentals.ca source configured. "
-            "Provide one of: ctx.params['rentals_ca_path'] (local CSV/XLSX), "
-            "ctx.params['rentals_ca_url'] (HTTP CSV/XLSX), or "
-            "ctx.params['rentals_ca_endpoint'] (API/JSON)."
+            "No Rentals.ca source configured. Provide rentals_ca_path / rentals_ca_url / rentals_ca_endpoint "
+            "or set rentals_ca_auto=True (default) to attempt automatic discovery."
         )
 
-    # Snapshot raw → MinIO (best-effort)
+    # snapshot → normalize → upsert (unchanged)
+    snapshot_key = None
     try:
         snapshot_key = snapshot_raw_to_minio(ctx, raw_bytes, raw_name, content_type)
         if snapshot_key:
-            log.info("Snapshotted raw Rentals.ca to minio://%s/%s", RAW_BUCKET, snapshot_key)
+            log.info(
+                "Snapshotted raw Rentals.ca to minio://%s/%s", RAW_BUCKET, snapshot_key
+            )
     except Exception as e:
         log.warning("Failed to snapshot Rentals.ca raw to MinIO (continuing): %s", e)
 
-    # Parse & normalize
     tidy = normalize_to_rents(raw_bytes, raw_name, content_type, ctx)
-
-    # Persist
     base.write_rents_upsert(tidy, ctx)
-
     log.info("Wrote %d Rentals.ca rows to public.rents", len(tidy))
     return tidy
+
+
+# -----------------------------
+# NEW: Asset discovery helpers
+# -----------------------------
+def discover_latest_tabular_asset(session: requests.Session) -> Optional[str]:
+    """
+    Crawl the latest National Rent Report page and the recent archive posts to find
+    a CSV or XLSX link. Returns the first discovered URL, else None.
+    """
+    # 1) Try the main landing (latest month)
+    urls = _extract_tabular_urls_from_page(session, DISCOVERY_START_URL)
+    if urls:
+        return urls[0]
+
+    # 2) Try the archive page and follow the latest N posts
+    post_urls = _extract_recent_report_post_urls(
+        session, ARCHIVE_URL, limit=AUTO_LOOKBACK_POSTS
+    )
+    for u in post_urls:
+        urls = _extract_tabular_urls_from_page(session, u)
+        if urls:
+            return urls[0]
+    return None
+
+
+def _extract_recent_report_post_urls(
+    session: requests.Session, archive_url: str, limit: int = 6
+) -> list[str]:
+    """
+    From the archive page, pull links to the most recent rent report posts.
+    """
+    html = session.get(archive_url, timeout=60).text
+    # basic anchors; Rentals.ca blog pages are WordPress-like
+    hrefs = re.findall(r'href="([^"]+)"', html, flags=re.IGNORECASE)
+    # keep only post URLs that look like monthly rent reports
+    post_candidates = [h for h in hrefs if re.search(r"/rent-report", h)]
+    # keep order of appearance, dedupe
+    seen, posts = set(), []
+    for h in post_candidates:
+        if h not in seen:
+            seen.add(h)
+            posts.append(h)
+        if len(posts) >= limit:
+            break
+    return posts
+
+
+def _extract_tabular_urls_from_page(session: requests.Session, url: str) -> list[str]:
+    """
+    Return all CSV/XLSX links on a page. Many months have only PDF/images;
+    we ignore non-tabular assets here.
+    """
+    resp = session.get(url, timeout=60)
+    resp.raise_for_status()
+    html = resp.text
+
+    # Look for explicit CSV/XLSX links
+    asset_urls = re.findall(r'href="([^"]+\.(?:csv|xlsx))"', html, flags=re.IGNORECASE)
+
+    # Also catch links routed through query params (e.g., ?file=...csv)
+    asset_urls += re.findall(
+        r'href="[^"]*?(?:file|url)=[^"&]*(\.csv|\.xlsx)[^"]*"',
+        html,
+        flags=re.IGNORECASE,
+    )
+
+    # Normalize to absolute URLs when needed
+    asset_urls = [_absolutize(u, base_url=url) for u in asset_urls]
+    # Deduplicate, keep order
+    seen, ordered = set(), []
+    for u in asset_urls:
+        if u not in seen:
+            seen.add(u)
+            ordered.append(u)
+    return ordered
+
+
+def _absolutize(link: str, base_url: str) -> str:
+    if re.match(r"^https?://", link):
+        return link
+    # crude join for relative paths
+    if link.startswith("/"):
+        m = re.match(r"^(https?://[^/]+)/", base_url)
+        if m:
+            return m.group(1) + link
+    # fallback: strip filename
+    return base_url.rsplit("/", 1)[0] + "/" + link
 
 
 # -----------------------------
@@ -164,7 +257,11 @@ def load_via_http(session: requests.Session, url: str) -> Tuple[bytes, str, str]
     resp.raise_for_status()
     # try to get a file-ish name
     name = _filename_from_headers_or_url(resp.headers, url)
-    return resp.content, name, resp.headers.get("Content-Type") or guess_content_type(name)
+    return (
+        resp.content,
+        name,
+        resp.headers.get("Content-Type") or guess_content_type(name),
+    )
 
 
 def load_from_endpoint(session: requests.Session, url: str) -> Tuple[bytes, str, str]:
@@ -183,7 +280,9 @@ def load_from_endpoint(session: requests.Session, url: str) -> Tuple[bytes, str,
 # -----------------------------
 # Normalization
 # -----------------------------
-def normalize_to_rents(raw: bytes, name: str, content_type: str, ctx: base.Context) -> pd.DataFrame:
+def normalize_to_rents(
+    raw: bytes, name: str, content_type: str, ctx: base.Context
+) -> pd.DataFrame:
     """
     Accepts CSV/Excel/JSON bytes; returns tidy DataFrame with columns:
       city, date, bedroom_type, median_rent, source
@@ -193,7 +292,10 @@ def normalize_to_rents(raw: bytes, name: str, content_type: str, ctx: base.Conte
     # 1) Parse to a raw DataFrame
     if content_type.startswith("application/json") or name.lower().endswith(".json"):
         df = _parse_json(raw)
-    elif content_type in ("application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") or name.lower().endswith((".xls", ".xlsx")):
+    elif content_type in (
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ) or name.lower().endswith((".xls", ".xlsx")):
         df = _parse_excel(raw)
     else:
         # default to CSV/TSV
@@ -204,9 +306,17 @@ def normalize_to_rents(raw: bytes, name: str, content_type: str, ctx: base.Conte
 
     # 2) Standardize columns (robust column finders)
     col_city = _first_present(df.columns, ["city", "location", "market", "metro"])
-    col_bed  = _first_present(df.columns, ["bedroom", "bedrooms", "bedroom_type", "type"])
-    col_med  = _first_present(df.columns, ["median_rent", "median", "median rent", "median_rent_$", "median ($)"])
-    col_avg  = _first_present(df.columns, ["average_rent", "avg", "average rent", "avg_rent", "average_rent_$"])
+    col_bed = _first_present(
+        df.columns, ["bedroom", "bedrooms", "bedroom_type", "type"]
+    )
+    col_med = _first_present(
+        df.columns,
+        ["median_rent", "median", "median rent", "median_rent_$", "median ($)"],
+    )
+    col_avg = _first_present(
+        df.columns,
+        ["average_rent", "avg", "average rent", "avg_rent", "average_rent_$"],
+    )
     col_month = _first_present(df.columns, ["month", "date", "period"])
 
     if not col_med and not col_avg:
@@ -217,8 +327,12 @@ def normalize_to_rents(raw: bytes, name: str, content_type: str, ctx: base.Conte
 
     # 3) Build working DF with best available rent metric (prefer median; fallback to average)
     rent_col = col_med or col_avg
-    work = df[[c for c in [col_city, col_bed, rent_col, col_month] if c is not None]].copy()
-    work.columns = ["city_raw", "bedraw", "rent_raw"][: len(work.columns)] + (["month_raw"] if col_month else [])
+    work = df[
+        [c for c in [col_city, col_bed, rent_col, col_month] if c is not None]
+    ].copy()
+    work.columns = ["city_raw", "bedraw", "rent_raw"][: len(work.columns)] + (
+        ["month_raw"] if col_month else []
+    )
 
     # 4) Normalize bedrooms → our canonical labels
     work["bedroom_type"] = (
@@ -243,7 +357,9 @@ def normalize_to_rents(raw: bytes, name: str, content_type: str, ctx: base.Conte
         .str.strip()
         .str.lower()
         .map(CITY_MAP)
-        .fillna(work["city_raw"].astype(str).str.strip().str.title())  # graceful fallback
+        .fillna(
+            work["city_raw"].astype(str).str.strip().str.title()
+        )  # graceful fallback
     )
     work = work[work["city"].isin(TARGET_CITIES)]
 
@@ -282,7 +398,9 @@ def normalize_to_rents(raw: bytes, name: str, content_type: str, ctx: base.Conte
 # -----------------------------
 # Raw snapshot to MinIO (best-effort)
 # -----------------------------
-def snapshot_raw_to_minio(ctx: base.Context, raw: bytes, name: str, content_type: str) -> Optional[str]:
+def snapshot_raw_to_minio(
+    ctx: base.Context, raw: bytes, name: str, content_type: str
+) -> Optional[str]:
     """
     Attempts to write the raw payload to MinIO/S3. This is best-effort and will not
     fail the run if the client isn’t available. Returns the object key on success.
@@ -302,14 +420,25 @@ def snapshot_raw_to_minio(ctx: base.Context, raw: bytes, name: str, content_type
             buf = io.BytesIO(raw)
             length = len(raw)
             if hasattr(client, "put_object"):
-                client.put_object(RAW_BUCKET, key, buf, length, content_type=content_type or "application/octet-stream")
+                client.put_object(
+                    RAW_BUCKET,
+                    key,
+                    buf,
+                    length,
+                    content_type=content_type or "application/octet-stream",
+                )
                 return key
         except Exception as e:
             logging.getLogger(__name__).warning("MinIO put_object failed: %s", e)
 
     # If the project has a filesystem staging, use it (optional)
     try:
-        local_raw_dir = os.path.join(ctx.workdir if hasattr(ctx, "workdir") else ".", "raw_snapshots", RAW_PREFIX, yyyymm)
+        local_raw_dir = os.path.join(
+            ctx.workdir if hasattr(ctx, "workdir") else ".",
+            "raw_snapshots",
+            RAW_PREFIX,
+            yyyymm,
+        )
         os.makedirs(local_raw_dir, exist_ok=True)
         with open(os.path.join(local_raw_dir, name), "wb") as f:
             f.write(raw)
@@ -414,8 +543,29 @@ def _infer_month_from_name(name: str) -> Optional[dt.date]:
         y, mo = int(m.group(1)), int(m.group(2))
         return dt.date(y, mo, 1)
     # Also try month names
-    month_map = {m.lower(): i for i, m in enumerate(["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], start=1)}
-    m2 = re.search(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[_-]?(20\d{2})", s)
+    month_map = {
+        m.lower(): i
+        for i, m in enumerate(
+            [
+                "Jan",
+                "Feb",
+                "Mar",
+                "Apr",
+                "May",
+                "Jun",
+                "Jul",
+                "Aug",
+                "Sep",
+                "Oct",
+                "Nov",
+                "Dec",
+            ],
+            start=1,
+        )
+    }
+    m2 = re.search(
+        r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[_-]?(20\d{2})", s
+    )
     if m2:
         mo = month_map[m2.group(1)]
         y = int(m2.group(2))
