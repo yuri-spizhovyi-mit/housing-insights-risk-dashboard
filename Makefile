@@ -162,3 +162,13 @@ etl-rentals-file:
 etl-backfill-boc:
 \tSTART_DATE=2010-01-01 END_DATE=2025-09-01 \\
 \tpython -m ml.pipelines.daily_ingest --source boc --date 2025-09-10
+
+# Path to migration files
+MIGRATIONS_DIR = infra/db/migrations
+
+# Use DATABASE_URL from environment
+DB_URL ?= $(DATABASE_URL)
+
+migrate:
+	psql "$(DB_URL)" -f $(MIGRATIONS_DIR)/V1__etl_basics.sql
+	psql "$(DB_URL)" -f $(MIGRATIONS_DIR)/V2__rent_listings_raw.sql
