@@ -103,87 +103,9 @@ def write_df(
         return int(total)
 
 
-# def write_hpi_upsert(df: pd.DataFrame, ctx: Context) -> int:
-#     """
-#     Idempotent upsert for house_price_index matching your V1 schema:
-
-#     Columns expected:
-#       city TEXT, date DATE, index_value DOUBLE PRECISION, measure TEXT, source TEXT
-
-#     PK / grain: (city, date, measure)
-#     """
-#     if df is None or df.empty:
-#         return 0
-
-#     # Ensure required columns exist and normalized
-#     needed = {"city", "date", "index_value", "measure", "source"}
-#     miss = needed - set(map(str.lower, df.columns))
-#     if miss:
-#         raise ValueError(f"write_hpi_upsert: missing columns: {sorted(miss)}")
-
-#     # Normalize column names + types
-#     dfn = df.copy()
-#     dfn.columns = [c.lower() for c in dfn.columns]
-#     # Ensure Python date objects (or date-like) for 'date'
-#     dfn["date"] = pd.to_datetime(dfn["date"]).dt.date
-#     # Force float for index_value
-#     dfn["index_value"] = dfn["index_value"].astype(float)
-
-#     # Build tuples for execute_values
-#     rows = [
-#         (r.city, r.date, float(r.index_value), r.measure, r.source)
-#         for r in dfn.itertuples(index=False)
-#     ]
-
-#     upsert_sql = """
-#     INSERT INTO public.house_price_index (city, "date", index_value, measure, source)
-#     VALUES %s
-#     ON CONFLICT (city, "date", measure) DO UPDATE
-#       SET index_value = EXCLUDED.index_value,
-#           source      = EXCLUDED.source
-#     """
-
-#     with ctx.engine.begin() as conn:
-#         raw = conn.connection  # psycopg2 connection under the SQLAlchemy hood
-#         with raw.cursor() as cur:
-#             execute_values(cur, upsert_sql, rows)
-#         total = conn.execute(
-#             text('SELECT COUNT(*) FROM public."house_price_index"')
-#         ).scalar_one()
-#         return int(total)
-
-
 def month_floor(d: pd.Series) -> pd.Series:
     # convert to first day of month
     return pd.to_datetime(d.astype(str)).dt.to_period("M").dt.to_timestamp()
-
-
-# def write_metrics_upsert(df: pd.DataFrame, ctx: "Context") -> None:
-#     if df is None or df.empty:
-#         return
-#     needed = {"metric", "city", "date", "value", "source"}
-#     missing = needed - set(df.columns)
-#     if missing:
-#         raise ValueError(f"metrics upsert missing columns: {missing}")
-
-#     df = df.dropna(subset=["metric", "city", "date"]).drop_duplicates(
-#         subset=["metric", "city", "date"], keep="last"
-#     )
-
-#     sql = text("""
-#         INSERT INTO public.metrics (metric, value, city, "date", source)
-#         VALUES (:metric, :value, :city, :date, :source)
-#         ON CONFLICT ("date", metric, city)
-#         DO UPDATE SET
-#             value  = EXCLUDED.value,
-#             source = EXCLUDED.source
-#     """)
-#     rows = df.to_dict(orient="records")
-#     eng = ctx.engine()
-#     with eng.begin() as cx:
-#         cx.execute(sql, rows)
-
-# ml/src/etl/base.py
 
 
 def _resolve_engine(ctx):
