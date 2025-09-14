@@ -6,8 +6,5 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class HousingController {
-    @GetMapping("/health")
-    public ResponseEntity<?> getVerificationMessage(){
-        return ResponseEntity.ok("OK");
-    }
+    
 }
