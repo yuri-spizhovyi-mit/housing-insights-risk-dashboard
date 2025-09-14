@@ -115,7 +115,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>housing-predicting-app</finalName>
+		<finalName>housing-predicting-api</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

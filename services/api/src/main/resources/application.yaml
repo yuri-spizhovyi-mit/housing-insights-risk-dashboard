@@ -1,24 +1,24 @@
 spring:
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
-    database-platform: org.postgresql.dialect.PostgreSQLDialect
+      ddl-auto: ${DDL_AUTO:create-drop}
+    show-sql: ${SHOW_SQL:false}
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
 
 server:
-  port: ${APP_PORT}
-  address: ${ALLOWED_CONNECTION_ACCEPTING_PORTS}
+  port: ${PORT:8080}
+  address: 0.0.0.0 # It tells your app to accept connections from any IP address, not just itself
 
-managment:
-  endpoints:
-    web:
-      exposure:
-        include: health, info
+management: # Spring Boot Actuator configuration (monitoring/health checks)
+  endpoints: # Defines which monitoring endpoints are available
+    web: # Web-based endpoints (HTTP URLs)
+      exposure: # Which endpoints to expose publicly
+        include: health,info # Only expose /actuator/health and /actuator/info
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: when-authorized # Only show detailed health info to authorized users
