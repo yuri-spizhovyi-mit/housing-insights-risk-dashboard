@@ -1,9 +1,11 @@
 import { MapPin } from "lucide-react";
-import { useState } from "react";
+
 import SelectorShell from "./SelectorShell";
+import FilterSelector from "./FilterSelector";
+import { useFilters } from "../../context/FilterContext";
 
 function CitySelector() {
-  const [city, setCity] = useState("Kelowna");
+  const { dispatch, city } = useFilters();
   const cities = ["Kelowna", "Vancouver", "Toronto"];
 
   return (
@@ -12,17 +14,13 @@ function CitySelector() {
       className="px-4"
       type="City"
     >
-      <select
+      <FilterSelector
         value={city}
-        onChange={(e) => setCity(e.target.value)}
-        className="bg-transparent focus:outline-none px-1"
-      >
-        {cities.map((c) => (
-          <option key={c} value={c} className="bg-neutral-900">
-            {c}
-          </option>
-        ))}
-      </select>
+        data={cities}
+        handleValueUpdate={(city: string) =>
+          dispatch({ type: "SET_CITY", payload: city })
+        }
+      />
     </SelectorShell>
   );
 }

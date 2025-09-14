@@ -1,23 +1,21 @@
-import { useState } from "react";
 import SelectorShell from "./SelectorShell";
+import { useFilters } from "../../context/FilterContext";
+import FilterSelector from "./FilterSelector";
 
 function PropertyTypeSelector() {
-  const [propertyType, setPropertyType] = useState("Condo");
   const propertyTypes = ["Condo", "House", "Town House", "Apartment"];
 
+  const { dispatch, propertyType } = useFilters();
+
   return (
-    <SelectorShell type="Type" className="px-4">
-      <select
+    <SelectorShell type="Property Type" className="px-4">
+      <FilterSelector
         value={propertyType}
-        onChange={(e) => setPropertyType(e.target.value)}
-        className="bg-transparent focus:outline-none px-1"
-      >
-        {propertyTypes.map((t) => (
-          <option key={t} value={t} className="bg-neutral-900">
-            {t}
-          </option>
-        ))}
-      </select>
+        data={propertyTypes}
+        handleValueUpdate={(property: string) =>
+          dispatch({ type: "SET_PROPERTY_TYPE", payload: property })
+        }
+      />
     </SelectorShell>
   );
 }

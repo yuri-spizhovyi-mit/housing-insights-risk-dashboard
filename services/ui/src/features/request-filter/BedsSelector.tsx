@@ -1,28 +1,20 @@
-import { useState } from "react";
 import SelectorShell from "./SelectorShell";
+import { useFilters } from "../../context/FilterContext";
+import FilterSelector from "./FilterSelector";
 
 function BedsSelector() {
-  const [beds, setBeds] = useState("any");
+  const { dispatch, beds } = useFilters();
+  const quant = ["Any", "1", "2", "3+"];
+
   return (
     <SelectorShell type="Beds" className="px-6">
-      <select
+      <FilterSelector
         value={beds}
-        onChange={(e) => setBeds(e.target.value)}
-        className="bg-transparent focus:outline-none"
-      >
-        <option value="any" className="bg-neutral-900">
-          Any
-        </option>
-        <option value="1" className="bg-neutral-900">
-          1
-        </option>
-        <option value="2" className="bg-neutral-900">
-          2
-        </option>
-        <option value="3+" className="bg-neutral-900">
-          3+
-        </option>
-      </select>
+        data={quant}
+        handleValueUpdate={(beds: string) =>
+          dispatch({ type: "SET_BEDS", payload: beds })
+        }
+      />
     </SelectorShell>
   );
 }

@@ -9,18 +9,6 @@ import SqrtRangeSelector from "./SqrtRangeSelector";
 import YeatBuiltSelector from "./YeatBuiltSelector";
 import { FilterProvider } from "../../context/FilterContext.tsx";
 import FilterContainer from "./FilterContainer.tsx";
-/**
- * {
-                city,
-                horizon,
-                propertyType,
-                beds,
-                baths,
-                sqftMin,
-                sqftMax,
-                yearBuilt,
-              }
- */
 
 function FilterManager() {
   return (

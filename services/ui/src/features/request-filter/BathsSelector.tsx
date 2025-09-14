@@ -1,28 +1,20 @@
-import { useState } from "react";
 import SelectorShell from "./SelectorShell";
+import FilterSelector from "./FilterSelector";
+import { useFilters } from "../../context/FilterContext";
+
 function BathsSelector() {
-  const [baths, setBaths] = useState("any");
+  const { dispatch, baths } = useFilters();
+  const quant = ["Any", "1", "2", "3+"];
 
   return (
     <SelectorShell type="Baths" className="px-4">
-      <select
+      <FilterSelector
         value={baths}
-        onChange={(e) => setBaths(e.target.value)}
-        className="bg-transparent focus:outline-none"
-      >
-        <option value="any" className="bg-neutral-900">
-          Any
-        </option>
-        <option value="1" className="bg-neutral-900">
-          1
-        </option>
-        <option value="2" className="bg-neutral-900">
-          2
-        </option>
-        <option value="3+" className="bg-neutral-900">
-          3+
-        </option>
-      </select>
+        data={quant}
+        handleValueUpdate={(baths: string) =>
+          dispatch({ type: "SET_PROPERTY_TYPE", payload: baths })
+        }
+      />
     </SelectorShell>
   );
 }

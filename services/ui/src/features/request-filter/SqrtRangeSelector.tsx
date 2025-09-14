@@ -1,9 +1,8 @@
-import { useState } from "react";
 import SelectorShell from "./SelectorShell";
+import { useFilters } from "../../context/FilterContext";
 
 function SqrtRangeSelector() {
-  const [sqftMin, setSqftMin] = useState(500);
-  const [sqftMax, setSqftMax] = useState(2500);
+  const { dispatch, sqftMin, sqftMax } = useFilters();
 
   return (
     <SelectorShell className="px-4">
@@ -15,7 +14,15 @@ function SqrtRangeSelector() {
           max={5000}
           step={50}
           value={sqftMin}
-          onChange={(e) => setSqftMin(Math.min(+e.target.value, sqftMax))}
+          onChange={(e) =>
+            dispatch({
+              type: "SET_SQFT",
+              payload: {
+                min: Math.min(+e.target.value, sqftMax),
+                max: sqftMax,
+              },
+            })
+          }
         />
         <span className="opacity-70 text-xs">min {sqftMin}</span>
         <input
@@ -24,7 +31,15 @@ function SqrtRangeSelector() {
           max={5500}
           step={50}
           value={sqftMax}
-          onChange={(e) => setSqftMax(Math.max(+e.target.value, sqftMin))}
+          onChange={(e) =>
+            dispatch({
+              type: "SET_SQFT",
+              payload: {
+                min: sqftMin,
+                max: Math.max(+e.target.value, sqftMin),
+              },
+            })
+          }
         />
         <span className="opacity-70 text-xs">max {sqftMax}</span>
       </div>

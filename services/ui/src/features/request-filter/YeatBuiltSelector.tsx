@@ -1,29 +1,20 @@
-import { useState } from "react";
 import SelectorShell from "./SelectorShell";
+import { useFilters } from "../../context/FilterContext";
+import FilterSelector from "./FilterSelector";
 
 function YeatBuiltSelector() {
-  const [yearBuilt, setYearBuilt] = useState("any");
+  const { dispatch, baths } = useFilters();
+  const quant = ["Any", "2000+", "2010+", "2020+"];
 
   return (
     <SelectorShell type="Year Built" className="px-4">
-      <select
-        value={yearBuilt}
-        onChange={(e) => setYearBuilt(e.target.value)}
-        className="bg-transparent focus:outline-none"
-      >
-        <option value="any" className="bg-neutral-900">
-          Any
-        </option>
-        <option value="2000+" className="bg-neutral-900">
-          2000+
-        </option>
-        <option value="2010+" className="bg-neutral-900">
-          2010+
-        </option>
-        <option value="2020+" className="bg-neutral-900">
-          2020+
-        </option>
-      </select>
+      <FilterSelector
+        value={baths}
+        data={quant}
+        handleValueUpdate={(year: string) =>
+          dispatch({ type: "SET_YEAR_BUILT", payload: year })
+        }
+      />
     </SelectorShell>
   );
 }
