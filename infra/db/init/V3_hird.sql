@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS public.listings_features (
     property_type_house     BOOLEAN,
     property_type_condo     BOOLEAN,
     property_type_apartment BOOLEAN,
+    property_type_townhouse BOOLEAN,
     -- Add more one-hot encoded features as needed
     CONSTRAINT fk_listings_features_listing_id
         FOREIGN KEY (listing_id) REFERENCES public.listings_raw(listing_id)

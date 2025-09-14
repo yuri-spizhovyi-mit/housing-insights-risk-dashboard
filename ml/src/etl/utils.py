@@ -2,6 +2,25 @@
 import re
 import unicodedata
 from typing import Optional
+from pathlib import Path
+from datetime import datetime
+
+
+def save_snapshot(text: str, out_dir: str, basename: str, ext: str = "html") -> str:
+    ts = datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    p = Path(out_dir)
+    p.mkdir(parents=True, exist_ok=True)
+    path = p / f"{basename}.{ts}.{ext}"
+    path.write_text(text, encoding="utf-8")
+    return str(path)
+
+
+def is_kelowna_city(name: str | None) -> bool:
+    if not name:
+        return False
+    n = name.strip().lower()
+    return n in {"kelowna", "city of kelowna"}
+
 
 _CANON = {
     "kelowna": "Kelowna",

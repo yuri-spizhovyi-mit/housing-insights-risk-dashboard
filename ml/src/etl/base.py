@@ -1,25 +1,65 @@
-from typing import Optional
-import pandas as pd
-from sqlalchemy import text
-from sqlalchemy.engine import Engine
-
+import os
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Iterable, Mapping, Optional
 from urllib.parse import quote_plus
-import os
-from sqlalchemy import text
 
 import boto3
 import pandas as pd
 from dotenv import find_dotenv, load_dotenv
-from psycopg2.extras import (
-    execute_values,
-)  # requires psycopg2-binary in requirements.txt
+from psycopg import Connection
+from psycopg.extras import execute_values
+from psycopg2.extras import execute_values as execute_values_psycopg2
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 
 # Load .env starting from the current working directory upward (repo root)
 load_dotenv(find_dotenv(usecwd=True))
+
+LISTINGS_COLS = [
+    "listing_id",
+    "url",
+    "date_posted",
+    "city",
+    "postal_code",
+    "property_type",
+    "listing_type",
+    "price",
+    "bedrooms",
+    "bathrooms",
+    "area_sqft",
+    "year_built",
+    "description",
+]
+
+_UPSERT_SQL = f"""
+INSERT INTO public.listings_raw ({", ".join(LISTINGS_COLS)})
+VALUES %s
+ON CONFLICT (listing_id) DO UPDATE SET
+  url = EXCLUDED.url,
+  date_posted = GREATEST(public.listings_raw.date_posted, EXCLUDED.date_posted),
+  city = EXCLUDED.city,
+  postal_code = COALESCE(EXCLUDED.postal_code, public.listings_raw.postal_code),
+  property_type = COALESCE(EXCLUDED.property_type, public.listings_raw.property_type),
+  listing_type = COALESCE(EXCLUDED.listing_type, public.listings_raw.listing_type),
+  price = COALESCE(EXCLUDED.price, public.listings_raw.price),
+  bedrooms = COALESCE(EXCLUDED.bedrooms, public.listings_raw.bedrooms),
+  bathrooms = COALESCE(EXCLUDED.bathrooms, public.listings_raw.bathrooms),
+  area_sqft = COALESCE(EXCLUDED.area_sqft, public.listings_raw.area_sqft),
+  year_built = COALESCE(EXCLUDED.year_built, public.listings_raw.year_built),
+  description = COALESCE(EXCLUDED.description, public.listings_raw.description);
+"""
+
+
+def write_listings_upsert(conn: Connection, rows: Iterable[Mapping]) -> int:
+    values = [tuple(r.get(k) for k in LISTINGS_COLS) for r in rows]
+    if not values:
+        return 0
+    with conn.cursor() as cur:
+        execute_values(cur, _UPSERT_SQL, values, page_size=1000)
+    conn.commit()
+    return len(values)
 
 
 def _build_pg_url_from_env() -> str:
