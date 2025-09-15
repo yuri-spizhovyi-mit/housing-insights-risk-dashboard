@@ -14,7 +14,7 @@ function NewsItem({ title, tone, date }: NewsItemProps) {
 
   return (
     <li className="rounded-xl border border-neutral-800 p-3 bg-neutral-950">
-      <div className="text-sm font-medium line-clamp-1">{title}</div>
+      <div className="text-sm font-medium line-clamp-1 mb-2">{title}</div>
       <div className="text-xs opacity-60 mt-1 flex items-center gap-2">
         <span className={`rounded-full px-2 py-0.5 border ${toneClasses}`}>
           {tone.toUpperCase()}
