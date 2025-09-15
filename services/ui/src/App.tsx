@@ -1,17 +1,31 @@
-// import HousingDashboardWireframe from "./Wireframe";
-
-import FilterManager from "./features/request-filter/FilterManager";
-// import FeaturesLayout from "./ui/FeaturesLayout";
+import HomePriceForecast from "./features/home-price-forecast/HomePriceForecast";
+import RentForecast from "./features/rent-forecast/RentForecast";
+import FilterManager from "./features/request-manager/FilterManager";
+import RiskGauge from "./features/risk-gauge/RiskGauge";
+import SentimentAndNews from "./features/sentiment-and-news/SentimentAndNews";
+import WireframeNotes from "./features/wireframe-notes/WireframeNotes";
+import { useSmoothScroll } from "./hooks/useSmoothScroll";
+import ContainerGrid from "./ui/ContainerGrid";
+import Footer from "./ui/Footer";
 import Header from "./ui/Header";
 import Main from "./ui/Main";
 
 function App() {
+  useSmoothScroll();
+
   return (
     <>
       <Header />
       <Main>
         <FilterManager />
-        {/* <FeaturesLayout></FeaturesLayout> */}
+        <ContainerGrid>
+          <HomePriceForecast />
+          <RiskGauge />
+          <RentForecast />
+          <SentimentAndNews />
+          <WireframeNotes />
+        </ContainerGrid>
+        <Footer />
       </Main>
     </>
   );

@@ -7,8 +7,8 @@ import HorizonSelector from "./HorizonSelector";
 import PropertyTypeSelector from "./PropertyTypeSelector";
 import SqrtRangeSelector from "./SqrtRangeSelector";
 import YeatBuiltSelector from "./YeatBuiltSelector";
-import { FilterProvider } from "../../context/FilterContext.tsx";
 import FilterContainer from "./FilterContainer.tsx";
+import { FilterProvider } from "../../context/FilterContext.tsx";
 
 function FilterManager() {
   return (
