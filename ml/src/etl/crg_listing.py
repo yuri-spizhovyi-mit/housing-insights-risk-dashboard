@@ -19,11 +19,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # ---- import your existing DB connector ----
-try:
-    # adjust the path if your db.py lives in a different package
-    from .db import get_conn  # same style as your other scrapers
-except Exception:
-    from db import get_conn
+from .base import Context, write_listings_upsert
 
 # ---------- Constants ----------
 SNAPSHOT_DIR = "./.debug/craigslist"
@@ -145,6 +141,27 @@ def _collect_detail_urls(
     per_page = 120
     urls: List[str] = []
 
+    def extract_urls(soup: BeautifulSoup):
+        # 1) legacy list view
+        for a in soup.select("a.result-title.hdrlnk"):
+            href = a.get("href")
+            if href and href.startswith("http"):
+                urls.append(href)
+
+        # 2) gallery / modern markup fallback
+        # li elements usually have data-pid; anchors inside hold the href
+        for li in soup.select("li.cl-search-result, li.result-row, ul.rows > li"):
+            a = li.find("a", href=True)
+            if a and a["href"].startswith("http"):
+                urls.append(a["href"])
+
+        # 3) any anchor that looks like a posting link
+        if not urls:
+            for a in soup.select("a[href*='.craigslist.org/']"):
+                href = a.get("href")
+                if href and href.endswith(".html"):
+                    urls.append(href)
+
     # page 0
     s = 0
     url0 = f"{base_url}/search/{cat}?query={requests.utils.quote(query)}&s={s}"
@@ -153,13 +170,7 @@ def _collect_detail_urls(
     soup0 = BeautifulSoup(html0, "lxml")
     pages = min(_list_total_pages(soup0, per_page), max_pages)
 
-    def _extract(soup: BeautifulSoup):
-        for a in soup.select("a.result-title.hdrlnk"):
-            href = a.get("href")
-            if href and href.startswith("http"):
-                urls.append(href)
-
-    _extract(soup0)
+    extract_urls(soup0)
     time.sleep(sleep_sec)
 
     # remaining pages
@@ -169,7 +180,7 @@ def _collect_detail_urls(
         html = _get(url)
         _save_snapshot("list", f"{cat}_{s}", html)
         soup = BeautifulSoup(html, "lxml")
-        _extract(soup)
+        extract_urls(soup)
         time.sleep(sleep_sec)
 
     # dedupe
@@ -228,19 +239,29 @@ def _parse_detail(html: str) -> Dict:
             property_type = _clean_text(txt.split(":", 1)[-1])
             break
 
+        # ---- year_built (strict) ----
     year_built = None
+    # 1) explicit attribute group "year built: 2008"
     for span in soup.select(".attrgroup span"):
         txt = span.get_text(" ", strip=True).lower()
         if "year built" in txt:
-            m = re.search(r"(\d{4})", txt)
+            m = re.search(r"\b(18\d{2}|19\d{2}|20\d{2})\b", txt)
             if m:
-                year_built = int(m.group(1))
-                break
+                y = int(m.group(1))
+                if 1850 <= y <= dt.date.today().year:
+                    year_built = y
+            break
+
+    # 2) descriptive phrases in body (e.g., "built in 2007", "built 2015")
     if not year_built:
-        m = re.search(r"\b(19\d{2}|20\d{2})\b", soup.get_text(" ", strip=True))
+        body_txt = soup.get_text(" ", strip=True).lower()
+        m = re.search(
+            r"\b(?:year\s*built|built(?:\s*in)?)\s*[:\-]?\s*(18\d{2}|19\d{2}|20\d{2})\b",
+            body_txt,
+        )
         if m:
             y = int(m.group(1))
-            if 1900 <= y <= dt.date.today().year:
+            if 1850 <= y <= dt.date.today().year:
                 year_built = y
 
     desc_el = soup.select_one("#postingbody")
@@ -265,15 +286,16 @@ def _parse_detail(html: str) -> Dict:
 def _write_rows(rows: List[Dict]) -> int:
     if not rows:
         return 0
-    conn = get_conn()
-    try:
-        with conn, conn.cursor() as cur:
-            from psycopg2.extras import execute_batch
 
-            execute_batch(cur, UPSERT_SQL, rows, page_size=100)
-        return len(rows)
-    finally:
-        conn.close()
+    # Convert to psycopg2 connection for the upsert function
+    from psycopg2 import connect
+    from .base import _build_pg_url_from_env
+
+    pg_url = _build_pg_url_from_env()
+    pg_url_psycopg2 = pg_url.replace("postgresql+psycopg2://", "postgresql://")
+
+    with connect(pg_url_psycopg2) as conn:
+        return write_listings_upsert(conn, rows)
 
 
 # ---------- Public API ----------
@@ -363,14 +385,38 @@ def run(ctx) -> dict:
 
 # ---------- CLI (optional) ----------
 if __name__ == "__main__":
-    # Quick manual test:
-    #   python crg_listing.py
-    print(
-        "Wrote rows:",
-        scrape_craigslist_to_listings_raw(
-            category="rent",
-            query="vancouver",
-            max_pages=3,
-            sleep_sec=1.2,
-        ),
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument("--category", choices=["rent", "sale"], default="rent")
+    p.add_argument("--query", default="")
+    p.add_argument("--base-url", default="https://vancouver.craigslist.org")
+    p.add_argument("--city", default="Vancouver")
+    p.add_argument("--max-pages", type=int, default=3)
+    p.add_argument("--sleep-sec", type=float, default=1.2)
+    p.add_argument(
+        "--dryrun", action="store_true", help="Print counts only, do not write to DB"
     )
+    args = p.parse_args()
+
+    # quick visibility
+    print(
+        f"[INFO] category={args.category} query={args.query} pages={args.max_pages} sleep={args.sleep_sec}"
+    )
+
+    # if you want a quick probe before writing:
+    if args.dryrun:
+        urls = _collect_detail_urls(
+            args.base_url, args.category, args.query, args.max_pages, args.sleep_sec
+        )
+        print(f"[INFO] collected {len(urls)} detail URLs (dryrun)")
+    else:
+        wrote = scrape_craigslist_to_listings_raw(
+            base_url=args.base_url,
+            category=args.category,
+            query=args.query,
+            city=args.city,
+            max_pages=args.max_pages,
+            sleep_sec=args.sleep_sec,
+        )
+        print(f"Wrote rows: {wrote}")
