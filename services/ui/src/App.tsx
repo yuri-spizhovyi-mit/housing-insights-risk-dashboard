@@ -9,14 +9,13 @@ import ContainerGrid from "./ui/ContainerGrid";
 import Footer from "./ui/Footer";
 import Header from "./ui/Header";
 import Main from "./ui/Main";
-import { ThemeProvider } from "./context/ThemeContext";
 import Subheader from "./ui/Subheader";
 
 function App() {
   useSmoothScroll();
 
   return (
-    <ThemeProvider>
+    <>
       <Subheader />
       <Header />
       <Main>
@@ -30,7 +29,7 @@ function App() {
         </ContainerGrid>
         <Footer />
       </Main>
-    </ThemeProvider>
+    </>
   );
 }
 
