@@ -3,11 +3,11 @@ import re
 import unicodedata
 from typing import Optional
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def save_snapshot(text: str, out_dir: str, basename: str, ext: str = "html") -> str:
-    ts = datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     p = Path(out_dir)
     p.mkdir(parents=True, exist_ok=True)
     path = p / f"{basename}.{ts}.{ext}"

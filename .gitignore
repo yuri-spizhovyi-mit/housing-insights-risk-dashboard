@@ -25,3 +25,7 @@ reports/
 # Local helper scripts
 start-minio.ps1
 stop-minio.ps1
+# debug snapshots
+.debug/
+_debug/
+.cache/

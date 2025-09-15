@@ -172,3 +172,7 @@ DB_URL ?= $(DATABASE_URL)
 migrate:
 	psql "$(DB_URL)" -f $(MIGRATIONS_DIR)/V1__etl_basics.sql
 	psql "$(DB_URL)" -f $(MIGRATIONS_DIR)/V2__rent_listings_raw.sql
+
+.PHONY: listings
+listings:
+\tpython -m ml.src.etl.listings_ingest --max-pages 2 --sleep-sec 1.0

@@ -7,6 +7,7 @@ import re
 import json
 import logging
 import datetime as dt
+from datetime import timezone
 from typing import Optional, Tuple
 
 import pandas as pd
@@ -273,7 +274,7 @@ def load_from_endpoint(session: requests.Session, url: str) -> Tuple[bytes, str,
     resp.raise_for_status()
     # We store the *raw* JSON text as our snapshot
     raw = resp.content
-    name = f"rentals_ca_endpoint_{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}.json"
+    name = f"rentals_ca_endpoint_{dt.datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
     return raw, name, "application/json"
 
 
@@ -405,7 +406,7 @@ def snapshot_raw_to_minio(
     Attempts to write the raw payload to MinIO/S3. This is best-effort and will not
     fail the run if the client isn’t available. Returns the object key on success.
     """
-    ts = dt.datetime.utcnow()
+    ts = dt.datetime.now(timezone.utc)
     yyyymm = ts.strftime("%Y-%m")
     key = f"{RAW_PREFIX}/{yyyymm}/{name}"
 
@@ -595,4 +596,7 @@ def _filename_from_headers_or_url(headers, url: str) -> str:
         return m.group(1)
     # fallback to URL tail
     tail = url.split("?")[0].rstrip("/").split("/")[-1]
-    return tail or f"rentals_ca_{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv"
+    return (
+        tail
+        or f"rentals_ca_{dt.datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.csv"
+    )

@@ -6,14 +6,139 @@ from typing import Tuple, List, Dict, Optional
 import requests
 from bs4 import BeautifulSoup
 
-from utils import save_snapshot, is_kelowna_city
+from .utils import save_snapshot, is_kelowna_city
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; HIRD-ETL/1.0)"}
-BASE = (
-    "https://classifieds.castanet.net"  # listings live under /real-estate/ or /rental/
-)
-INDEX_PATH = "/real-estate/rentals/"  # adjust if needed
+BASE = "https://classifieds.castanet.net"
+INDEX_PATH = "/search/"
 SLEEP_SEC = 1.0
+
+# Default search parameters for rental listings
+DEFAULT_SEARCH_PARAMS = {
+    "rent_ptype": "88",  # Property type for rentals
+    "rent_location": "4",  # Location filter
+    "re_neighborhood4": "",
+    "re_neighborhood56": "",
+    "re_neighborhood58": "",
+    "other_city": "1836",  # Kelowna city ID
+    "furnished": "",
+    "minprice": "0",
+    "maxprice": "0",
+    "numbeds": "0-0",
+    "numbaths": "0-0",
+    "pet_friendly": "",
+    "perpage": "50",
+}
+
+# --- add these helpers near the top of the file ---
+
+DETAIL_KV_LABELS = {
+    "bedrooms": re.compile(r"^\s*bedrooms?\s*:\s*", re.I),
+    "bathrooms": re.compile(r"^\s*bathrooms?\s*:\s*", re.I),
+    "post_date": re.compile(r"^\s*post\s*date\s*:\s*", re.I),
+    "ad_number": re.compile(r"^\s*ad\s*number\s*:\s*", re.I),
+}
+
+
+def _clean_text(el) -> str | None:
+    if not el:
+        return None
+    t = el.get_text(" ", strip=True)
+    return t if t else None
+
+
+def _parse_details_panel(soup: BeautifulSoup) -> dict:
+    """
+    Scrape the right-hand 'Details' panel:
+      Bedrooms, Bathrooms, Post Date, Ad Number, etc.
+    Returns dict with raw strings; call _parse_* helpers to normalize.
+    """
+    out = {"bedrooms": None, "bathrooms": None, "post_date": None, "ad_number": None}
+
+    # The panel is often a <div> with legend/header 'Details' followed by rows <tr> or <li>
+    panel = None
+    # try common containers
+    for sel in [
+        "div:has(> h3:-soup-contains('Details'))",
+        "div:has(> h4:-soup-contains('Details'))",
+        "div.details",
+        "section.details",
+        "#details",
+    ]:
+        panel = soup.select_one(sel)
+        if panel:
+            break
+
+    # fall back: scan any table/list near text 'Details'
+    if not panel:
+        for hdr in soup.find_all(text=re.compile(r"^\s*Details\s*$", re.I)):
+            panel = hdr.parent if hdr and hdr.parent else None
+            if panel:
+                break
+
+    if not panel:
+        return out
+
+    # collect text lines from table rows or list items
+    lines = []
+    for tr in panel.select("tr"):
+        lines.append(_clean_text(tr))
+    for li in panel.select("li"):
+        lines.append(_clean_text(li))
+    if not lines:
+        lines = [_clean_text(panel)]
+
+    for raw in filter(None, lines):
+        low = raw.lower()
+        for key, rx in DETAIL_KV_LABELS.items():
+            if rx.search(low):
+                val = rx.sub("", raw).strip()
+                out[key] = val
+    return out
+
+
+def _parse_breadcrumb_type(soup: BeautifulSoup) -> str | None:
+    """
+    Breadcrumb like: Rentals / Apartment-Condo  -> 'Apartment' or 'Condo'
+    """
+    crumb = soup.select_one(".breadcrumbs, nav.breadcrumbs, .bread, .crumbs")
+    txt = _clean_text(crumb)
+    if not txt:
+        return None
+    # last token after slash
+    tail = txt.split("/")[-1].strip()
+    # normalize a couple of cases
+    if "condo" in tail.lower():
+        return "Condo"
+    if "apartment" in tail.lower():
+        return "Apartment"
+    if "town" in tail.lower():
+        return "Townhouse"
+    if "house" in tail.lower():
+        return "Detached"
+    return tail[:50]
+
+
+def _parse_price_from_detail(soup: BeautifulSoup) -> str | None:
+    """
+    Try multiple spots for the blue $ amount near title.
+    Returns raw text like '$1,995.00'
+    """
+    for sel in [
+        ".price",
+        ".amount",
+        ".price-blue",
+        "span:-soup-contains('$')",
+        "strong:-soup-contains('$')",
+    ]:
+        el = soup.select_one(sel)
+        if el and "$" in el.get_text():
+            return el.get_text(strip=True)
+    # fallback: scan title line
+    t = soup.select_one("h1, h2, .title")
+    if t and "$" in t.get_text():
+        return t.get_text(strip=True)
+    return None
 
 
 def _hash_id(url: str) -> str:
@@ -90,7 +215,8 @@ def _normalize_property_type(txt: str | None) -> Optional[str]:
         return "Condo" if "condo" in t else "Apartment"
     if any(k in t for k in ["house", "detached", "home"]):
         return "Detached"
-    return txt.strip().title()
+    # Truncate to fit VARCHAR(50) constraint
+    return txt.strip().title()[:50]
 
 
 def _extract_postal_code(text: str | None) -> Optional[str]:
@@ -130,12 +256,14 @@ def _make_listing_row(
 
     return {
         "listing_id": f"castanet:{_hash_id(url)}",
-        "url": url,
+        "url": (url or "")[:500],  # Truncate URL if too long
         "date_posted": date_posted or datetime.utcnow().date().isoformat(),
         "city": "Kelowna",
-        "postal_code": postal,
+        "postal_code": (postal or "")[:20]
+        if postal
+        else None,  # VARCHAR(20) constraint
         "property_type": prop_type,
-        "listing_type": listing_type,
+        "listing_type": (listing_type or "")[:10],  # VARCHAR(10) constraint
         "price": price,
         "bedrooms": beds,
         "bathrooms": baths,
@@ -152,90 +280,156 @@ def _get(url: str) -> str:
 
 
 def fetch_castanet(
-    city: str = "Kelowna", max_pages: int = 2, sleep_sec: float = SLEEP_SEC
+    city: str = "Kelowna",
+    max_pages: int = 2,
+    sleep_sec: float = SLEEP_SEC,
 ):
+    """
+    Scrape Castanet rentals for Kelowna and return:
+      rows: list[dict] normalized to listings_raw schema
+      raw_blobs: list[str] of raw HTML (index & detail pages) for snapshots
+
+    Depends on helpers in this module:
+      - _get, _parse_details_panel, _parse_breadcrumb_type, _parse_price_from_detail
+      - _parse_date, _parse_beds_baths, _normalize_property_type, _extract_postal_code
+      - _make_listing_row
+    """
     rows: List[Dict] = []
     raw_blobs: List[str] = []
 
     for page in range(1, max_pages + 1):
-        index_url = f"{BASE}{INDEX_PATH}?p={page}"
-        html = _get(index_url)
+        # Build the search URL (Kelowna rentals)
+        params = DEFAULT_SEARCH_PARAMS.copy()
+        params["p"] = str(page)
+        param_string = "&".join(f"{k}={v}" for k, v in params.items() if v != "")
+        index_url = f"{BASE}{INDEX_PATH}?{param_string}"
+
+        try:
+            html = _get(index_url)
+        except Exception:
+            # skip whole page on transient issues
+            time.sleep(sleep_sec)
+            continue
+
         raw_blobs.append(html)
         soup = BeautifulSoup(html, "lxml")
 
-        # Listing cards (use multiple selectors in case of layout variants)
-        cards = soup.select("div.listing, div.result, li.listing, article") or []
+        # Card links (Castanet uses <a class="prod_container" href="/details/...">)
+        cards = soup.select("a.prod_container")
+        if not cards:
+            # fallback selectors if layout changes
+            cards = soup.select("a[href*='/details/']")
+
         for card in cards:
-            # grab basics safely
-            a = card.select_one("a[href]") or card.find("a", href=True)
-            if not a:
+            href = card.get("href")
+            if not href:
                 continue
-            href = a["href"]
             url = href if href.startswith("http") else f"{BASE}{href}"
 
-            title = (
-                (card.select_one(".title, h2, h3") or {}).get_text(strip=True)
-                if card.select_one(".title, h2, h3")
-                else None
+            # Some quick info from the card (optional)
+            descr_el = card.select_one(".descr")
+            title_card = (
+                descr_el.select_one("h3, h4, .title, strong") if descr_el else None
             )
-            price_text = (
-                (card.select_one(".price, .listing-price, .amount") or {}).get_text(
-                    strip=True
-                )
-                if card.select_one(".price, .listing-price, .amount")
-                else None
+            title_text = title_card.get_text(strip=True) if title_card else None
+            price_card_el = descr_el.select_one(".price, .amount") if descr_el else None
+            price_card_text = (
+                price_card_el.get_text(strip=True) if price_card_el else None
             )
-            meta_chunk = (
-                (card.select_one(".meta, .details, .attributes") or {}).get_text(
-                    " ", strip=True
-                )
-                if card.select_one(".meta, .details, .attributes")
-                else None
-            )
-            date_text = (
-                (card.select_one(".date, .posted") or {}).get_text(" ", strip=True)
-                if card.select_one(".date, .posted")
-                else None
-            )
+            meta_card = descr_el.get_text(" ", strip=True) if descr_el else None
 
-            # often city appears in the snippet; if not, enforce later via detail page
-            city_guess = (
-                "Kelowna"
-                if "kelowna" in (meta_chunk or "").lower()
-                or "kelowna" in (title or "").lower()
-                else city
-            )
-
-            # follow detail page for description/postal code
+            # Open the detail page for authoritative fields
             try:
                 dhtml = _get(url)
-                raw_blobs.append(dhtml)
-                dsoup = BeautifulSoup(dhtml, "lxml")
-                desc_el = dsoup.select_one(
-                    ".description, #description, .content, article"
-                )
-                details_text = desc_el.get_text(" ", strip=True) if desc_el else None
-
-                # Sometimes city appears clearly on the detail page
-                city_el = dsoup.find(string=re.compile(r"Kelowna", re.I))
-                if city_el:
-                    city_guess = "Kelowna"
-
-                row = _make_listing_row(
+            except Exception:
+                # If detail fetch fails, try to salvage row from card data (still filtered by city)
+                tmp_row = _make_listing_row(
                     url=url,
-                    date_posted=_parse_date(date_text),
-                    title=title,
-                    city=city_guess,
-                    price_text=price_text,
-                    meta_chunk=meta_chunk,
-                    details_text=details_text,
+                    date_posted=datetime.utcnow().date().isoformat(),
+                    title=title_text,
+                    city=city,  # assume Kelowna from search filter
+                    price_text=price_card_text,
+                    meta_chunk=meta_card,
+                    details_text=None,
                     listing_type="rent",
                 )
-                if row and row["city"] == "Kelowna":
-                    rows.append(row)
-            except Exception:
-                # skip problematic listing but continue
+                if tmp_row:
+                    rows.append(tmp_row)
+                time.sleep(sleep_sec)
                 continue
+
+            raw_blobs.append(dhtml)
+            dsoup = BeautifulSoup(dhtml, "lxml")
+
+            # Title (detail page)
+            dt_title_el = dsoup.select_one(
+                "h1, h1.title, .title h1"
+            ) or dsoup.select_one(".det_title")
+            dt_title = dt_title_el.get_text(strip=True) if dt_title_el else title_text
+
+            # Price (detail page has the blue $ amount near the title)
+            price_text_detail = _parse_price_from_detail(dsoup) or price_card_text
+
+            # Breadcrumb -> property type
+            prop_type_bc = _parse_breadcrumb_type(dsoup)
+
+            # Details panel: Bedrooms / Bathrooms / Post Date / Ad Number
+            detail = _parse_details_panel(dsoup)
+            beds_d, baths_d = _parse_beds_baths(
+                " ".join(
+                    filter(None, [detail.get("bedrooms"), detail.get("bathrooms")])
+                )
+            )
+            date_d = _parse_date(detail.get("post_date"))
+            adnum = detail.get("ad_number")
+            native_id = adnum.strip() if adnum and adnum.strip().isdigit() else None
+
+            # Description
+            desc_el = (
+                dsoup.select_one(
+                    ".description, #description, .content, article, .prod-description"
+                )
+                or dsoup.select_one("#details + *")  # sometimes immediately after panel
+            )
+            details_text = desc_el.get_text(" ", strip=True) if desc_el else None
+
+            # Postal code anywhere on page
+            postal_from_page = _extract_postal_code(dsoup.get_text(" ", strip=True))
+
+            # City guard (should be Kelowna; confirm if visible on page)
+            city_guess = "Kelowna"
+            if "kelowna" not in dsoup.get_text(" ", strip=True).lower():
+                # still enforce Kelowna (search filter), but keep the guard in case you expand later
+                city_guess = city
+
+            # Build base row from generic normalizer
+            row = _make_listing_row(
+                url=url,
+                date_posted=date_d,  # may be None; normalizer will backfill today
+                title=dt_title or title_text,
+                city=city_guess,
+                price_text=price_text_detail,
+                meta_chunk=meta_card,  # keep meta text to help parse sqft/beds if needed
+                details_text=details_text,
+                listing_type="rent",
+            )
+
+            # Strengthen fields with detail-derived values
+            if row:
+                if prop_type_bc and not row.get("property_type"):
+                    row["property_type"] = prop_type_bc
+                if beds_d is not None:
+                    row["bedrooms"] = beds_d
+                if baths_d is not None:
+                    row["bathrooms"] = baths_d
+                if postal_from_page and not row.get("postal_code"):
+                    row["postal_code"] = postal_from_page
+                if native_id:
+                    row["listing_id"] = f"castanet:{native_id}"
+
+                # Final Kelowna filter
+                if row["city"] == "Kelowna" and is_kelowna_city(row["city"]):
+                    rows.append(row)
 
             time.sleep(sleep_sec)
 

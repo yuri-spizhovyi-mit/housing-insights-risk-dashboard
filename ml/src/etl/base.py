@@ -8,9 +8,8 @@ from urllib.parse import quote_plus
 import boto3
 import pandas as pd
 from dotenv import find_dotenv, load_dotenv
-from psycopg import Connection
-from psycopg.extras import execute_values
-from psycopg2.extras import execute_values as execute_values_psycopg2
+from psycopg2 import connect as psycopg2_connect
+from psycopg2.extras import execute_values
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -52,7 +51,7 @@ ON CONFLICT (listing_id) DO UPDATE SET
 """
 
 
-def write_listings_upsert(conn: Connection, rows: Iterable[Mapping]) -> int:
+def write_listings_upsert(conn, rows: Iterable[Mapping]) -> int:
     values = [tuple(r.get(k) for k in LISTINGS_COLS) for r in rows]
     if not values:
         return 0
