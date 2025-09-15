@@ -12,7 +12,7 @@ function BathsSelector() {
         value={baths}
         data={quant}
         handleValueUpdate={(baths: string) =>
-          dispatch({ type: "SET_PROPERTY_TYPE", payload: baths })
+          dispatch({ type: "SET_BATHS", payload: baths })
         }
       />
     </SelectorShell>
