@@ -12,10 +12,10 @@ function HorizonSelector() {
           <button
             key={h}
             onClick={() => setHorizon(h)}
-            className={`px-3 py-1.5 text-sm ${
+            className={`px-3 py-1.5 text-sm transition-colors ${
               horizon === h
                 ? "bg-neutral-200 text-neutral-900"
-                : "bg-neutral-900 hover:bg-neutral-800"
+                : "bg-neutral-900 hover:bg-neutral-800 text-neutral-100"
             }`}
           >
             {h}

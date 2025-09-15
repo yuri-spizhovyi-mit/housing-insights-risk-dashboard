@@ -39,7 +39,8 @@ function RiskGauge() {
                 y="50%"
                 textAnchor="middle"
                 dominantBaseline="middle"
-                className="fill-white text-sm xl:text-lg font-semibold"
+                className="text-sm xl:text-lg font-semibold"
+                fill="#e7e1cc"
               >
                 {riskScore}%
               </text>
@@ -50,21 +51,21 @@ function RiskGauge() {
         <div className="flex-1 text-sm divide-y divide-neutral-700">
           <div className="flex items-center justify-between py-4">
             <span className="opacity-80">Affordability</span>
-            <span className="rounded-full px-2 py-0.5 text-xs bg-neutral-800">
+            <span className="rounded-full px-2 py-0.5 text-xs bg-neutral-800 text-neutral-200">
               Tight
             </span>
           </div>
 
           <div className="flex items-center justify-between py-4">
             <span className="opacity-80">Price-to-Rent</span>
-            <span className="rounded-full px-2 py-0.5 text-xs bg-neutral-800">
+            <span className="rounded-full px-2 py-0.5 text-xs bg-neutral-800 text-neutral-200">
               Elevated
             </span>
           </div>
 
           <div className="flex items-center justify-between py-4">
             <span className="opacity-80">Inventory</span>
-            <span className="rounded-full px-2 py-0.5 text-xs bg-neutral-800">
+            <span className="rounded-full px-2 py-0.5 text-xs bg-neutral-800 text-neutral-200">
               Low
             </span>
           </div>

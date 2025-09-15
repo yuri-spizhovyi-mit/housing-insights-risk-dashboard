@@ -1,3 +1,4 @@
+import Frame from "../../ui/Frame";
 import NewsItem from "./NewsItem";
 import SentimentAndNewsHeader from "./SentimentAndNewsHeader";
 
@@ -25,14 +26,14 @@ function SentimentAndNews() {
   ];
 
   return (
-    <section className="col-span-12 lg:col-span-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+    <Frame className="col-span-12 lg:col-span-4 text-amber-50">
       <SentimentAndNewsHeader />
       <ul className="space-y-3">
         {newsItems.map((item, i) => (
           <NewsItem key={i} {...item} />
         ))}
       </ul>
-    </section>
+    </Frame>
   );
 }
 

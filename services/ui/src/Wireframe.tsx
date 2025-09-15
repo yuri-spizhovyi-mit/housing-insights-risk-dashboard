@@ -142,9 +142,15 @@ export default function HousingDashboardWireframe() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-neutral-950 text-neutral-100">
+    <div
+      className="min-h-screen w-full text-neutral-100"
+      style={{ backgroundColor: "var(--brand-bg-neutral-950)" }}
+    >
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-900/60 sticky top-0 backdrop-blur">
+      <header
+        className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 sticky top-0 backdrop-blur"
+        style={{ backgroundColor: "var(--brand-bg-header)" }}
+      >
         <div className="flex items-center gap-3">
           <LineChartIcon className="size-6 text-neutral-300" />
           <h1 className="text-xl font-semibold tracking-tight">
@@ -174,7 +180,11 @@ export default function HousingDashboardWireframe() {
                 className="bg-transparent focus:outline-none px-1"
               >
                 {cities.map((c) => (
-                  <option key={c} value={c} className="bg-neutral-900">
+                  <option
+                    key={c}
+                    value={c}
+                    style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                  >
                     {c}
                   </option>
                 ))}
@@ -210,7 +220,11 @@ export default function HousingDashboardWireframe() {
                 className="bg-transparent focus:outline-none px-1"
               >
                 {propertyTypes.map((t) => (
-                  <option key={t} value={t} className="bg-neutral-900">
+                  <option
+                    key={t}
+                    value={t}
+                    style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                  >
                     {t}
                   </option>
                 ))}
@@ -225,16 +239,28 @@ export default function HousingDashboardWireframe() {
                 onChange={(e) => setBeds(e.target.value)}
                 className="bg-transparent focus:outline-none"
               >
-                <option value="any" className="bg-neutral-900">
+                <option
+                  value="any"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   Any
                 </option>
-                <option value="1" className="bg-neutral-900">
+                <option
+                  value="1"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   1
                 </option>
-                <option value="2" className="bg-neutral-900">
+                <option
+                  value="2"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   2
                 </option>
-                <option value="3+" className="bg-neutral-900">
+                <option
+                  value="3+"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   3+
                 </option>
               </select>
@@ -248,16 +274,28 @@ export default function HousingDashboardWireframe() {
                 onChange={(e) => setBaths(e.target.value)}
                 className="bg-transparent focus:outline-none"
               >
-                <option value="any" className="bg-neutral-900">
+                <option
+                  value="any"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   Any
                 </option>
-                <option value="1" className="bg-neutral-900">
+                <option
+                  value="1"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   1
                 </option>
-                <option value="2" className="bg-neutral-900">
+                <option
+                  value="2"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   2
                 </option>
-                <option value="3+" className="bg-neutral-900">
+                <option
+                  value="3+"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   3+
                 </option>
               </select>
@@ -300,16 +338,28 @@ export default function HousingDashboardWireframe() {
                 onChange={(e) => setYearBuilt(e.target.value)}
                 className="bg-transparent focus:outline-none"
               >
-                <option value="any" className="bg-neutral-900">
+                <option
+                  value="any"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   Any
                 </option>
-                <option value="2000+" className="bg-neutral-900">
+                <option
+                  value="2000+"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   2000+
                 </option>
-                <option value="2010+" className="bg-neutral-900">
+                <option
+                  value="2010+"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   2010+
                 </option>
-                <option value="2020+" className="bg-neutral-900">
+                <option
+                  value="2020+"
+                  style={{ backgroundColor: "var(--brand-bg-neutral-900)" }}
+                >
                   2020+
                 </option>
               </select>
@@ -340,7 +390,7 @@ export default function HousingDashboardWireframe() {
       {/* Main Grid */}
       <main className="px-6 py-6 grid grid-cols-12 gap-4">
         {/* Price Forecast */}
-        <div className="col-span-12 lg:col-span-8 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+        <div className="col-span-12 lg:col-span-8 rounded-2xl border border-neutral-800 p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold flex items-center gap-2">
               <Home className="size-5 opacity-80" /> Home Price Forecast
@@ -378,7 +428,7 @@ export default function HousingDashboardWireframe() {
         </div>
 
         {/* Risk Gauge + Indicators */}
-        <aside className="col-span-12 lg:col-span-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+        <aside className="col-span-12 lg:col-span-4 rounded-2xl border border-neutral-800 p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold">Risk Gauge (macro + local)</h2>
             <span className="text-xs opacity-60">composite index (stub)</span>
@@ -433,7 +483,7 @@ export default function HousingDashboardWireframe() {
         </aside>
 
         {/* Rent Forecast */}
-        <div className="col-span-12 lg:col-span-8 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+        <div className="col-span-12 lg:col-span-8 rounded-2xl border border-neutral-800 p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold flex items-center gap-2">
               <DollarSign className="size-5 opacity-80" /> Rent Forecast
@@ -469,7 +519,7 @@ export default function HousingDashboardWireframe() {
         </div>
 
         {/* Sentiment / News */}
-        <section className="col-span-12 lg:col-span-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+        <section className="col-span-12 lg:col-span-4 rounded-2xl border border-neutral-800 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Newspaper className="size-4 opacity-80" />
             <h2 className="font-semibold">Sentiment & News</h2>
@@ -519,7 +569,7 @@ export default function HousingDashboardWireframe() {
         </section>
 
         {/* Footer / Notes */}
-        <div className="col-span-12 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+        <div className="col-span-12 rounded-2xl border border-neutral-800 p-4">
           <h3 className="font-semibold mb-2">Wireframe Notes</h3>
           <ul className="list-disc pl-5 text-sm space-y-1 opacity-80">
             <li>
