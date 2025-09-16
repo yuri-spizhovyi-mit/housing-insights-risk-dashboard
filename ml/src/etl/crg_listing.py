@@ -14,12 +14,16 @@ import math
 import datetime as dt
 from decimal import Decimal
 from typing import Dict, Iterable, List, Optional
-
+from urllib.parse import urljoin, urlsplit, urlunsplit
 import requests
 from bs4 import BeautifulSoup
-
+from playwright.sync_api import sync_playwright
 # ---- import your existing DB connector ----
-from .base import Context, write_listings_upsert
+try:
+    # adjust the path if your db.py lives in a different package
+    from .db import get_conn  # same style as your other scrapers
+except Exception:
+    from db import get_conn
 
 # ---------- Constants ----------
 SNAPSHOT_DIR = "./.debug/craigslist"
@@ -30,7 +34,14 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36 (+housing-insights-etl)"
 )
-HEADERS = {"User-Agent": USER_AGENT, "Accept-Language": "en-CA,en;q=0.9"}
+HEADERS = HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://vancouver.craigslist.org/",
+}
+
 
 CATEGORY_MAP = {"rent": "apa", "sale": "rea"}  # Craigslist paths
 
@@ -67,7 +78,21 @@ ON CONFLICT (listing_id) DO UPDATE SET
     year_built = COALESCE(EXCLUDED.year_built, listings_raw.year_built),
     description = COALESCE(EXCLUDED.description, listings_raw.description);
 """
+def _abs_url(base_url: str, href: str) -> str:
+    """Make href absolute and strip query/hash to dedupe."""
+    u = urljoin(base_url, href)
+    parts = urlsplit(u)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
+def _get_playwright(url: str, sleep_sec: float = 2.0) -> str:
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, timeout=60000)
+        page.wait_for_timeout(int(sleep_sec * 1000))  # wait for JS to load
+        html = page.content()
+        browser.close()
+        return html
 
 # ---------- I/O helpers ----------
 def _save_snapshot(kind: str, ident: str, html: str) -> None:
@@ -142,49 +167,50 @@ def _collect_detail_urls(
     urls: List[str] = []
 
     def extract_urls(soup: BeautifulSoup):
-        # 1) legacy list view
-        for a in soup.select("a.result-title.hdrlnk"):
-            href = a.get("href")
-            if href and href.startswith("http"):
-                urls.append(href)
-
-        # 2) gallery / modern markup fallback
-        # li elements usually have data-pid; anchors inside hold the href
-        for li in soup.select("li.cl-search-result, li.result-row, ul.rows > li"):
+        found = 0
+        for li in soup.select("li.cl-search-result"):
+            a = li.find("a", class_="cl-app-anchor", href=True)
+            if a and a["href"]:
+                urls.append(_abs_url(base_url, a["href"]))
+                found += 1
+        for li in soup.select("li.result-row, ul.rows > li"):
             a = li.find("a", href=True)
-            if a and a["href"].startswith("http"):
-                urls.append(a["href"])
+            if a and a["href"].endswith(".html"):
+                urls.append(_abs_url(base_url, a["href"]))
+                found += 1
+        print(f"Found {found} listing URLs on this page")
 
-        # 3) any anchor that looks like a posting link
-        if not urls:
-            for a in soup.select("a[href*='.craigslist.org/']"):
-                href = a.get("href")
-                if href and href.endswith(".html"):
-                    urls.append(href)
-
-    # page 0
+    # ---- First page ----
     s = 0
     url0 = f"{base_url}/search/{cat}?query={requests.utils.quote(query)}&s={s}"
-    html0 = _get(url0)
+    print(f"Fetching: {url0}")
+    if category == "sale":
+        html0 = _get_playwright(url0, sleep_sec)
+    else:
+        html0 = _get(url0)
     _save_snapshot("list", f"{cat}_{s}", html0)
     soup0 = BeautifulSoup(html0, "lxml")
     pages = min(_list_total_pages(soup0, per_page), max_pages)
+    print(f"Total pages found: {pages}")
 
     extract_urls(soup0)
     time.sleep(sleep_sec)
 
-    # remaining pages
+    # ---- Remaining pages ----
     for page in range(1, pages):
         s = page * per_page
         url = f"{base_url}/search/{cat}?query={requests.utils.quote(query)}&s={s}"
-        html = _get(url)
+        if category == "sale":
+            html = _get_playwright(url, sleep_sec)
+        else:
+            html = _get(url)
         _save_snapshot("list", f"{cat}_{s}", html)
         soup = BeautifulSoup(html, "lxml")
         extract_urls(soup)
         time.sleep(sleep_sec)
 
-    # dedupe
     return list(dict.fromkeys(urls))
+
 
 
 # ---------- Detail parsing ----------
@@ -239,29 +265,19 @@ def _parse_detail(html: str) -> Dict:
             property_type = _clean_text(txt.split(":", 1)[-1])
             break
 
-        # ---- year_built (strict) ----
     year_built = None
-    # 1) explicit attribute group "year built: 2008"
     for span in soup.select(".attrgroup span"):
         txt = span.get_text(" ", strip=True).lower()
         if "year built" in txt:
-            m = re.search(r"\b(18\d{2}|19\d{2}|20\d{2})\b", txt)
+            m = re.search(r"(\d{4})", txt)
             if m:
-                y = int(m.group(1))
-                if 1850 <= y <= dt.date.today().year:
-                    year_built = y
-            break
-
-    # 2) descriptive phrases in body (e.g., "built in 2007", "built 2015")
+                year_built = int(m.group(1))
+                break
     if not year_built:
-        body_txt = soup.get_text(" ", strip=True).lower()
-        m = re.search(
-            r"\b(?:year\s*built|built(?:\s*in)?)\s*[:\-]?\s*(18\d{2}|19\d{2}|20\d{2})\b",
-            body_txt,
-        )
+        m = re.search(r"\b(19\d{2}|20\d{2})\b", soup.get_text(" ", strip=True))
         if m:
             y = int(m.group(1))
-            if 1850 <= y <= dt.date.today().year:
+            if 1900 <= y <= dt.date.today().year:
                 year_built = y
 
     desc_el = soup.select_one("#postingbody")
@@ -286,16 +302,15 @@ def _parse_detail(html: str) -> Dict:
 def _write_rows(rows: List[Dict]) -> int:
     if not rows:
         return 0
+    conn = get_conn()
+    try:
+        with conn, conn.cursor() as cur:
+            from psycopg2.extras import execute_batch
 
-    # Convert to psycopg2 connection for the upsert function
-    from psycopg2 import connect
-    from .base import _build_pg_url_from_env
-
-    pg_url = _build_pg_url_from_env()
-    pg_url_psycopg2 = pg_url.replace("postgresql+psycopg2://", "postgresql://")
-
-    with connect(pg_url_psycopg2) as conn:
-        return write_listings_upsert(conn, rows)
+            execute_batch(cur, UPSERT_SQL, rows, page_size=100)
+        return len(rows)
+    finally:
+        conn.close()
 
 
 # ---------- Public API ----------
@@ -312,7 +327,12 @@ def scrape_craigslist_to_listings_raw(
     Scrape Craigslist and upsert into public.listings_raw.
     Returns number of rows written in the final batch (for quick feedback).
     """
+    print(f"Starting scrape: {category} listings for '{query}' in {city}")
+    print(f"Base URL: {base_url}")
+    print(f"Max pages: {max_pages}")
+
     detail_urls = _collect_detail_urls(base_url, category, query, max_pages, sleep_sec)
+    print(f"Found {len(detail_urls)} detail URLs to scrape")
 
     listing_type = "rent" if category == "rent" else "sale"
     batch: List[Dict] = []
@@ -387,36 +407,46 @@ def run(ctx) -> dict:
 if __name__ == "__main__":
     import argparse
 
-    p = argparse.ArgumentParser()
-    p.add_argument("--category", choices=["rent", "sale"], default="rent")
-    p.add_argument("--query", default="")
-    p.add_argument("--base-url", default="https://vancouver.craigslist.org")
-    p.add_argument("--city", default="Vancouver")
-    p.add_argument("--max-pages", type=int, default=3)
-    p.add_argument("--sleep-sec", type=float, default=1.2)
-    p.add_argument(
-        "--dryrun", action="store_true", help="Print counts only, do not write to DB"
+    parser = argparse.ArgumentParser(description="Scrape Craigslist listings")
+    parser.add_argument(
+        "--category",
+        choices=["rent", "sale"],
+        default="rent",
+        help="Category to scrape: rent or sale",
     )
-    args = p.parse_args()
+    parser.add_argument(
+        "--query", default="", help="Search query (default: vancouver)"
+    )
+    parser.add_argument(
+        "--max-pages", type=int, default=3, help="Maximum pages to scrape (default: 3)"
+    )
+    parser.add_argument(
+        "--sleep-sec",
+        type=float,
+        default=1.2,
+        help="Sleep between requests in seconds (default: 1.2)",
+    )
+    parser.add_argument(
+        "--base-url",
+        default="https://vancouver.craigslist.org",
+        help="Base URL for Craigslist (default: vancouver)",
+    )
+    parser.add_argument(
+        "--city",
+        default="Vancouver",
+        help="City name for database (default: Vancouver)",
+    )
 
-    # quick visibility
+    args = parser.parse_args()
+
     print(
-        f"[INFO] category={args.category} query={args.query} pages={args.max_pages} sleep={args.sleep_sec}"
-    )
-
-    # if you want a quick probe before writing:
-    if args.dryrun:
-        urls = _collect_detail_urls(
-            args.base_url, args.category, args.query, args.max_pages, args.sleep_sec
-        )
-        print(f"[INFO] collected {len(urls)} detail URLs (dryrun)")
-    else:
-        wrote = scrape_craigslist_to_listings_raw(
-            base_url=args.base_url,
+        "Wrote rows:",
+        scrape_craigslist_to_listings_raw(
             category=args.category,
             query=args.query,
-            city=args.city,
             max_pages=args.max_pages,
             sleep_sec=args.sleep_sec,
-        )
-        print(f"Wrote rows: {wrote}")
+            base_url=args.base_url,
+            city=args.city,
+        ),
+    )
