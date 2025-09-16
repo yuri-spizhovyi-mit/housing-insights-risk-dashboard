@@ -9,10 +9,10 @@ from psycopg2 import connect
 def get_engine() -> Engine:
     url = os.getenv("DATABASE_URL")
     if not url:
-        user = os.getenv("POSTGRES_USER", "hird")
-        pwd = os.getenv("POSTGRES_PASSWORD", "hirdpw")
+        user = os.getenv("POSTGRES_USER", "postgres")
+        pwd = os.getenv("POSTGRES_PASSWORD", "postgres")
         host = os.getenv("POSTGRES_HOST", "localhost")
-        port = os.getenv("POSTGRES_PORT", "5432")
+        port = os.getenv("POSTGRES_PORT", "5433")
         db = os.getenv("POSTGRES_DB", "hird")
         url = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
     engine = create_engine(url, pool_pre_ping=True, future=True)
@@ -25,10 +25,10 @@ def get_conn():
     """Get a raw psycopg2 connection for scripts that need direct database access."""
     url = os.getenv("DATABASE_URL")
     if not url:
-        user = os.getenv("POSTGRES_USER", "hird")
-        pwd = os.getenv("POSTGRES_PASSWORD", "hirdpw")
+        user = os.getenv("POSTGRES_USER", "postgres")
+        pwd = os.getenv("POSTGRES_PASSWORD", "postgres")
         host = os.getenv("POSTGRES_HOST", "localhost")
-        port = os.getenv("POSTGRES_PORT", "5432")
+        port = os.getenv("POSTGRES_PORT", "5433")
         db = os.getenv("POSTGRES_DB", "hird")
         url = f"postgresql://{user}:{pwd}@{host}:{port}/{db}"
     else:
