@@ -10,7 +10,7 @@ import Frame from "../../ui/Frame";
 import HomePriceForecastHeader from "./HomePriceForecastHeader";
 
 const staticData = [
-  { date: "2025-01", value: 700 },
+  { date: "2025-1", value: 700 },
   { date: "2025-02", value: 710 },
   { date: "2025-03", value: 725 },
   { date: "2025-04", value: 730 },
@@ -20,6 +20,21 @@ const staticData = [
   { date: "2025-08", value: 785 },
   { date: "2025-09", value: 800 },
   { date: "2025-10", value: 810 },
+  { date: "2025-11", value: 700 },
+  { date: "2025-12", value: 700 },
+
+  { date: "2026-01", value: 700 },
+  { date: "2026-02", value: 710 },
+  { date: "2026-03", value: 725 },
+  { date: "2026-04", value: 730 },
+  { date: "2026-05", value: 740 },
+  { date: "2026-06", value: 755 },
+  { date: "2026-07", value: 770 },
+  { date: "2026-08", value: 785 },
+  { date: "2026-09", value: 800 },
+  { date: "2026-10", value: 810 },
+  { date: "2026-11", value: 700 },
+  { date: "2026-12", value: 700 },
 ];
 
 function HomePriceForecast() {
