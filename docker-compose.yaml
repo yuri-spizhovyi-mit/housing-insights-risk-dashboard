@@ -18,6 +18,21 @@ services:
       timeout: 3s
       retries: 20
 
+  backup:
+    image: postgres:16
+    container_name: hird-backup
+    depends_on:
+      - postgres
+    volumes:
+      - ./infra/db/backups:/backups
+    entrypoint: >
+      bash -c "while true; do
+        pg_dump -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} > /backups/hird_latest.sql;
+        sleep 86400;
+      done"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+
   pgadmin:
     image: dpage/pgadmin4:8.12
     container_name: hird-pgadmin
