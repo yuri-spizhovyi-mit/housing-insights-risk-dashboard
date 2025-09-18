@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from ..db import query
+from services.fastapi.db import query
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
@@ -7,9 +7,13 @@ router = APIRouter(prefix="/forecast", tags=["forecast"])
 @router.get("/{city}")
 def get_forecast(city: str):
     sql = """
-        SELECT forecast_date, p50, p80, p95, risk_index
+        SELECT 
+            predict_date AS date,
+            yhat AS p50,
+            yhat_lower AS p80,
+            yhat_upper AS p95
         FROM model_predictions
         WHERE city = %s
-        ORDER BY forecast_date
+        ORDER BY predict_date
     """
     return query(sql, (city,))

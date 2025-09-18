@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routes import forecast, risk, sentiment, anomalies, report, cities
+from services.fastapi.routes import forecast, risk, sentiment, report, cities
 
 app = FastAPI(title="Housing Insights API")
 
@@ -8,7 +8,7 @@ app.include_router(cities.router)
 app.include_router(forecast.router)
 app.include_router(risk.router)
 app.include_router(sentiment.router)
-app.include_router(anomalies.router)
+# app.include_router(anomalies.router)
 app.include_router(report.router)
 
 
