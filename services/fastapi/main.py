@@ -1,33 +1,17 @@
 from fastapi import FastAPI
-import psycopg2, os
-from psycopg2.extras import RealDictCursor
+from routes import forecast, risk, sentiment, anomalies, report, cities
 
-app = FastAPI()
+app = FastAPI(title="Housing Insights API")
 
-DB_URL = os.getenv("DATABASE_URL")
-
-
-def query(sql, params=None):
-    conn = psycopg2.connect(DB_URL, sslmode="require", cursor_factory=RealDictCursor)
-    cur = conn.cursor()
-    cur.execute(sql, params or ())
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
+# Register routers
+app.include_router(cities.router)
+app.include_router(forecast.router)
+app.include_router(risk.router)
+app.include_router(sentiment.router)
+app.include_router(anomalies.router)
+app.include_router(report.router)
 
 
 @app.get("/")
 def root():
     return {"status": "ok", "service": "fastapi"}
-
-
-@app.get("/forecast/{city}")
-def get_forecast(city: str):
-    sql = """
-        SELECT forecast_date, p50, p80, p95, risk_index
-        FROM model_predictions
-        WHERE city = %s
-        ORDER BY forecast_date
-    """
-    return query(sql, (city,))
