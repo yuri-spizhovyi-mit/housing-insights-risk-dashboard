@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from services.fastapi.db import query
+from db import query
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
