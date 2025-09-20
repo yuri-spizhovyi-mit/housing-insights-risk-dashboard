@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from db import query
+from services.fastapi.db import query
 
 router = APIRouter(prefix="/cities", tags=["cities"])
 
