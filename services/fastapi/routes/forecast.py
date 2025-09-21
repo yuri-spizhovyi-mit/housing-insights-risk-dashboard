@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
 from sqlalchemy.orm import Session
 from db import get_db
-from services.fastapi.models.model_predictions import ModelPrediction
+from models.model_predictions import ModelPrediction
 from datetime import date, timedelta
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
