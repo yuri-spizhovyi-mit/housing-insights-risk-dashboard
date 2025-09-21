@@ -1,7 +1,22 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from routes import forecast, risk, sentiment, report, cities
 
 app = FastAPI(title="Housing Insights API")
+
+# ✅ Configure CORS
+origins = [
+    "http://localhost:5173",  # local frontend dev
+    "https://hird.netlify.app",  # deployed frontend
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # or ["*"] for all
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Register routers
 app.include_router(cities.router)
