@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fapi.routes import forecast, risk, sentiment, report, cities
+from services.fapi.routes import forecast, risk, sentiment, report, cities
 
 app = FastAPI(title="Housing Insights API")
 
