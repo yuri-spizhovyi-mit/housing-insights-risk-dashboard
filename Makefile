@@ -178,5 +178,39 @@ listings:
 \tpython -m ml.src.etl.listings_ingest --max-pages 2 --sleep-sec 1.0
 
 fastapi-dev:
-	@echo "Starting FastAPI with correct PYTHONPATH for local development..."
-	PYTHONPATH=services/fastapi uvicorn main:app --reload --port 8000 --app-dir services/fastapi
+	@echo "Starting FastAPI on http://localhost:8000 ..."
+	uvicorn services.fapi.main:app --reload --port 8000
+
+# Virtual environment directory
+VENV := .venv
+
+# Default Python executable
+PYTHON := python3
+
+# Neon DB connection string (replace with your own)
+DATABASE_URL := postgresql+psycopg2://user:password@ep-xxxxx.neon.tech/dbname?sslmode=require
+
+# Create virtual environment
+venv:
+	$(PYTHON) -m venv $(VENV)
+
+# Install dependencies
+install: venv
+	$(VENV)/bin/pip install --upgrade pip
+	$(VENV)/bin/pip install -r requirements.txt
+
+# Run FastAPI locally with uvicorn
+run:
+	@echo "Starting FastAPI on http://localhost:8000 ..."
+	DATABASE_URL=$(DATABASE_URL) $(VENV)/bin/uvicorn services.fapi.main:app --reload --port 8000
+
+# Type check imports with mypy
+lint:
+	$(VENV)/bin/pip install mypy
+	$(VENV)/bin/mypy services/fapi
+
+# Clean environment
+clean:
+	rm -rf $(VENV)
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+
