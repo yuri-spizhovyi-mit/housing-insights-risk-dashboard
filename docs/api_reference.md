@@ -9,19 +9,23 @@ Base URL (local):
 http://localhost:8080/v1
 ```
 
+Base URL (production):
+
+```http
+https://housing-insights-risk-dashboard.vercel.app/
+```
+
 ---
 
 ## 📌 Endpoints
 
-| Method | Endpoint                | Description                         |
-| ------ | ----------------------- | ----------------------------------- |
-| GET    | `/v1/cities`            | List supported cities               |
-| GET    | `/v1/metrics/{city}`    | Return key metrics for a city       |
-| GET    | `/v1/forecast/{city}`   | Short-term forecast (prices, rents) |
-| GET    | `/v1/risk/{city}`       | Risk indicators + crisis similarity |
-| GET    | `/v1/anomalies/{city}`  | Anomaly detection results           |
-| GET    | `/v1/sentiment/{city}`  | News sentiment index for a city     |
-| GET    | `/v1/report/{city}.pdf` | Download 2-page PDF report          |
+| Method | Endpoint             | Description                         |
+| ------ | -------------------- | ----------------------------------- |
+| GET    | `/cities`            | List supported cities               |
+| GET    | `/forecast/{city}`   | Forecast (prices or rents) for city |
+| GET    | `/risk/{city}`       | Risk indicators for a city          |
+| GET    | `/sentiment/{city}`  | News sentiment index for a city     |
+| GET    | `/report/{city}.pdf` | Download PDF report for a city      |
 
 ---
 

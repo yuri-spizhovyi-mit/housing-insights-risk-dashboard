@@ -176,3 +176,7 @@ migrate:
 .PHONY: listings
 listings:
 \tpython -m ml.src.etl.listings_ingest --max-pages 2 --sleep-sec 1.0
+
+fastapi-dev:
+	@echo "Starting FastAPI with correct PYTHONPATH for local development..."
+	PYTHONPATH=services/fastapi uvicorn main:app --reload --port 8000 --app-dir services/fastapi
