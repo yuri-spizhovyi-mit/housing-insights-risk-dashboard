@@ -1,10 +1,10 @@
 {
   "builds": [
     {
-      "src": "main.py",
+      "src": "services/fapi/main.py",
       "use": "@vercel/python",
       "config": { "maxLambdaSize": "50mb", "runtime": "python3.12" }
     }
   ],
-  "routes": [{ "src": "/(.*)", "dest": "main.py" }]
+  "routes": [{ "src": "/(.*)", "dest": "services/fapi/main.py" }]
 }
