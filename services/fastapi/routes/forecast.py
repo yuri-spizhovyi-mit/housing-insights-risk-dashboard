@@ -1,32 +1,64 @@
-from fastapi import APIRouter, HTTPException
-from db import query
-import logging
+# forecast.py
+from fastapi import APIRouter, Query, HTTPException, Depends
+from sqlalchemy.orm import Session
+from db import get_db
+from models.model_predictions import ModelPrediction
+from datetime import date, timedelta
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
+HORIZON_MAP = {"1y": 12, "2y": 24, "5y": 60, "10y": 120}
+
 
 @router.get("/{city}")
-def get_forecast(city: str):
-    try:
-        sql = """
-            SELECT 
-                predict_date AS date,
-                yhat AS p50,
-                yhat_lower AS p80,
-                yhat_upper AS p95
-            FROM model_predictions
-            WHERE city = %s
-            ORDER BY predict_date
-        """
-        rows = query(sql, (city,))
+def get_forecast(
+    city: str,
+    horizon: str = Query("1y", enum=HORIZON_MAP.keys()),
+    propertyType: str | None = None,
+    beds: int | None = None,
+    baths: int | None = None,
+    sqftMin: int | None = None,
+    sqftMax: int | None = None,
+    yearBuiltMin: int | None = None,
+    yearBuiltMax: int | None = None,
+    db: Session = Depends(get_db),
+):
+    months = HORIZON_MAP[horizon]
+    start_date = date.today()
+    end_date = start_date + timedelta(days=30 * months)
 
-        if not rows:
-            raise HTTPException(
-                status_code=404, detail=f"No forecast data found for {city}"
-            )
+    query = db.query(ModelPrediction).filter(
+        ModelPrediction.city == city,
+        ModelPrediction.predict_date >= start_date,
+        ModelPrediction.predict_date <= end_date,
+    )
 
-        return rows
+    if propertyType:
+        query = query.filter(ModelPrediction.property_type == propertyType)
+    if beds:
+        query = query.filter(ModelPrediction.beds == beds)
+    if baths:
+        query = query.filter(ModelPrediction.baths == baths)
+    if sqftMin:
+        query = query.filter(ModelPrediction.sqft_min >= sqftMin)
+    if sqftMax:
+        query = query.filter(ModelPrediction.sqft_max <= sqftMax)
+    if yearBuiltMin:
+        query = query.filter(ModelPrediction.year_built_min >= yearBuiltMin)
+    if yearBuiltMax:
+        query = query.filter(ModelPrediction.year_built_max <= yearBuiltMax)
 
-    except Exception:
-        logging.exception("Database error in /forecast/%s", city)
-        raise HTTPException(status_code=500, detail="Internal server error")
+    rows = query.order_by(ModelPrediction.predict_date).all()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No forecast data for {city}")
+
+    return [
+        {
+            "date": row.predict_date.isoformat(),
+            "p50": float(row.yhat),
+            "p80": float(row.yhat_lower) if row.yhat_lower else None,
+            "p95": float(row.yhat_upper) if row.yhat_upper else None,
+        }
+        for row in rows
+    ]
