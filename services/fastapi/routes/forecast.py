@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from db import query
+import logging
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
@@ -17,6 +18,15 @@ def get_forecast(city: str):
             WHERE city = %s
             ORDER BY predict_date
         """
-        return query(sql, (city,))
-    except Exception as e:
-        return {"error": str(e)}
+        rows = query(sql, (city,))
+
+        if not rows:
+            raise HTTPException(
+                status_code=404, detail=f"No forecast data found for {city}"
+            )
+
+        return rows
+
+    except Exception:
+        logging.exception("Database error in /forecast/%s", city)
+        raise HTTPException(status_code=500, detail="Internal server error")
