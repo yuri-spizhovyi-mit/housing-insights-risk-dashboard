@@ -6,3 +6,4 @@ uvicorn
 psycopg2-binary
 reportlab
 python-dotenv
+sqlalchemy
