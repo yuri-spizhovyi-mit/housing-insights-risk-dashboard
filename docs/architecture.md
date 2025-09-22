@@ -1,87 +1,82 @@
-# 🏗 System Architecture
+# 🏗 System Architecture (FastAPI-first)
 
 The Housing Insights + Risk Dashboard MVP is composed of five main layers:
 
 ---
 
-## 1. Frontend (React/TypeScript)
+## 1) Frontend (React / TypeScript)
 
 - Owner: Max
 - Built with React + TypeScript + Vite
 - Features:
-  - City selector (Kelowna, Vancouver, Toronto)
-  - Charts: forecast bands, risk gauge, anomalies
-  - Sentiment timeline
-  - PDF download button
+  - Filters: City, Horizon, Property Type, Beds, Baths, Sqft range, Year Built
+  - Charts: Home Price Forecast (Recharts), Rent Forecast (Recharts)
+  - Risk Gauge (Recharts), Sentiment feed
+  - Report download (PDF)
 
 ---
 
-## 2. API Layer (Spring Boot 3 / Java)
+## 2) API Layer (FastAPI / Python)
 
-- Owner: Max
-- Responsibilities: serve housing forecasts, risk indicators, anomalies, sentiment, and reports.
+— **Current**
+
+- Owner: Max & Yuri
+- Responsibilities: serve forecasts, risk indicators, sentiment, reports
 - Endpoints:
-  - `/v1/cities`
-  - `/v1/forecast/{city}`
-  - `/v1/risk/{city}`
-  - `/v1/anomalies/{city}`
-  - `/v1/sentiment/{city}`
-  - `/v1/report/{city}.pdf`
+  - `/cities`
+  - `/forecast` (query params for filters)
+  - `/risk`
+  - `/sentiment`
+  - `/report/{city}.pdf`
 - Features:
-  - Authentication (API key/JWT)
-  - CORS, rate limiting
-  - Swagger/OpenAPI documentation
+  - CORS for `localhost:5173` and `hird.netlify.app`
+  - OpenAPI schema via FastAPI
+  - Ready for React Query integration
 
 ---
 
-## 3. Model Layer (Python / FastAPI)
+## 3) Model Layer (Python)
 
-- Owner: Yuri
-- Services:
-  - Forecasting (Prophet, LightGBM)
-  - Risk similarity classifier (Random Forest / Logistic Regression)
-  - Anomaly detection (Isolation Forest)
-- Model artifacts stored in MinIO (S3FS layout)
+- Forecasting (Prophet / LightGBM)
+- Risk logic (composite indices)
+- Sentiment (NLP pipeline)
+- Artifacts stored in object storage (e.g., MinIO/S3)
 
 ---
 
-## 4. Reporting Layer (Python / FastAPI)
+## 4) Reporting Layer (Python)
 
-- Owner: Yuri
-- Pipeline: Jinja2 → HTML → PDF (WeasyPrint/Playwright)
-- Responsibilities:
-  - Generate 2-page reports (Forecast + Risk)
-  - Store PDFs in MinIO with versioned filenames
+- Jinja2 → HTML → PDF
+- Exposed as `/report/{city}.pdf`
 
 ---
 
-## 5. Data Layer
+## 5) Data Layer
 
-- PostgreSQL + PostGIS → stores metrics, features, forecasts, risk scores, anomalies, sentiment
-- MinIO (S3-compatible) → raw data snapshots, ML artifacts, PDF reports
-
----
-
-## 6. Data Ingestion & NLP
-
-- ETL pipelines:
-  - CREA (HPI benchmark)
-  - CMHC + Rentals.ca (rents)
-  - StatCan + Bank of Canada (macro)
-  - News RSS feeds (CBC, Globe & Mail, local)
-- NLP pipeline: HuggingFace DistilBERT → daily sentiment index
+- PostgreSQL (Neon) for:
+  - `model_predictions` (serving cache)
+  - Aggregates (house_price_index, rent_index, demographics, macro, news_sentiment)
+- Object storage (MinIO/S3) for raw snapshots & artifacts
 
 ---
 
-## 📊 Architecture Diagram
+## 🔭 Future: Java API Gateway (Spring Boot)
+
+- Purpose: Authentication, rate limiting, tenant routing, observability
+- Mode: Reverse proxy → forwards `/cities`, `/forecast`, `/risk`, `/sentiment`, `/report` to FastAPI
+- Contract: JSON shapes remain the same; only base URL changes
+
+---
+
+## 📊 Diagram
 
 ![System Architecture](../docs/img/architecture-diagram.png)
 
 ---
 
-## Design Principles
+## Principles
 
-- Separation of concerns: ML in Python, serving in Java, UI in React
-- Reproducibility: versioned data and artifacts in MinIO
-- Accessibility: API-first with OpenAPI schema
-- Portability: one-command demo with Docker Compose
+- API-first contracts (stable JSON shapes)
+- Separation of concerns (UI ↔ API ↔ ML)
+- Reproducibility & versioning
+- Simple local & cloud deploys
