@@ -8,127 +8,161 @@
 
 ## 🎯 Goal
 
-Replace all mock data in the HIRD dashboard (`hird.netlify.app`) with live data from FastAPI endpoints.  
-Ensure every UI widget correctly maps to its backend data source.
+Replace all mock data in the HIRD dashboard with live data from FastAPI endpoints. Ensure every widget maps cleanly to its endpoint and response shape.
 
 ---
 
 ## 🔗 UI → API Mapping
 
-### 1. City Selector (Dropdown)
+### 1) City Selector (Dropdown)
 
-- **Element:** Dropdown at top (City: Kelowna, Vancouver, Toronto)
 - **API:** `GET /cities`
-- **Data:**
-
-  ```json
-  ["Kelowna", "Vancouver", "Toronto"]
-  ```
-
----
-
-### 2. Forecast Charts (Home Price Forecast / Rent Forecast)
-
-- **Element:** Line charts (top-left, bottom-left)
-- **API:** `GET /forecast/{city}`
-
-#### Data Source
-
-From **`model_predictions`** table:
-
-- `city` → Kelowna / Vancouver / Toronto
-- `predict_date` → forecast date
-- `yhat` → main prediction (→ `p50`)
-- `yhat_lower` → lower bound (→ `p80`)
-- `yhat_upper` → upper bound (→ `p95`)
-
-#### Example Response
+- **Use:** Populate City dropdown and (optionally) Property Type options per city
+- **Response:**
 
 ```json
-[
-  { "date": "2025-08-01", "p50": 1865, "p80": 1770, "p95": 1960 },
-  { "date": "2025-09-01", "p50": 1878, "p80": 1784, "p95": 1975 },
-  { "date": "2025-10-01", "p50": 2400, "p80": 2300, "p95": 2500 }
-]
+{
+  "cities": {
+    "Kelowna": ["Condo", "House"],
+    "Toronto": ["Condo"],
+    "Vancouver": ["Apartment", "Townhouse"]
+  }
+}
 ```
 
-#### Notes
+---
 
-- Use `p50` for the main chart line.
-- Shade the area between `p80` and `p95` as confidence bands.
-- Filters (Beds, Baths, Sqft, Year Built) remain **UI-only for now**.
+### 2) Home Price Forecast (Recharts Line)
+
+- **API:** `GET /forecast`
+- **Params:** from FilterContext → `city`, `target=price`, `horizon`, `propertyType`, `beds`, `baths`, `sqftMin`, `sqftMax`, `yearBuiltMin`, `yearBuiltMax`
+- **Response:**
+
+```json
+{
+  "city": "Kelowna",
+  "target": "price",
+  "horizon": 24,
+  "data": [
+    { "date": "2025-10-01", "value": 785000, "lower": 765000, "upper": 805000 }
+  ]
+}
+```
+
+- **Chart data expected by Recharts:**
+
+```js
+data.map((d) => ({
+  date: d.date,
+  value: d.value,
+  lower: d.lower,
+  upper: d.upper,
+}));
+```
 
 ---
 
-### 3. Risk Gauge (macro + local)
+### 3) Rent Forecast (Recharts Line)
 
-- **Element:** Gauge widget (top-right)
-- **API:** `GET /risk/{city}`
-- **Data:**
+- **API:** `GET /forecast`
+- **Params:** same as above but `target=rent`
+- **Response:** same structure, values are rent amounts
 
-  ```json
-  {
-    "city": "Vancouver",
-    "risk_index": 0.45,
-    "level": "Moderate",
-    "indicators": {
-      "affordability": 0.6,
-      "price_to_rent": 28.5,
-      "inventory": "Low"
+---
+
+### 4) Risk Gauge
+
+- **API:** `GET /risk?city={city}`
+- **Response:**
+
+```json
+{
+  "city": "Vancouver",
+  "date": "2025-09-21",
+  "score": 62,
+  "breakdown": [
+    { "name": "Affordability", "status": "Tight" },
+    { "name": "Price-to-Rent", "status": "Elevated" },
+    { "name": "Inventory", "status": "Low" }
+  ]
+}
+```
+
+- **Usage:**
+  - `score` drives the gauge
+  - `breakdown` shows side labels
+
+---
+
+### 5) Sentiment & News
+
+- **API:** `GET /sentiment?city={city}`
+- **Response:**
+
+```json
+{
+  "city": "Kelowna",
+  "items": [
+    {
+      "date": "2025-08-29",
+      "headline": "New supply targets announced",
+      "sentiment": "NEU"
+    },
+    {
+      "date": "2025-08-14",
+      "headline": "Rate cuts delayed; affordability worsens",
+      "sentiment": "NEG"
     }
-  }
-  ```
-
-- **Notes:**
-
-  - `risk_index` (0–1) drives gauge needle.
-  - `level` (“Low”, “Moderate”, “High”) shows as label.
-  - Indicators displayed as secondary labels.
+  ]
+}
+```
 
 ---
 
-### 4. Sentiment & News (Panel)
+## 🔧 Implementation Snippets
 
-- **Element:** News list with sentiment labels (bottom-right)
-- **API:** `GET /sentiment/{city}`
-- **Data:**
+### Build query string from FilterContext
 
-  ```json
-  {
-    "city": "Kelowna",
-    "sentiment_index": 0.42,
-    "label": "Negative",
-    "trend_30d": [0.55, 0.51, 0.47, 0.42],
-    "top_headlines": [
-      "Kelowna rental demand rises",
-      "Rate cuts delayed; affordability worsens",
-      "New supply targets announced"
-    ],
-    "last_updated": "2025-09-25"
+```ts
+const toParams = (f: {
+  city: string;
+  horizon: string;
+  propertyType: string;
+  beds: string;
+  baths: string;
+  sqftMin: number;
+  sqftMax: number;
+  yearBuilt: string;
+}) => {
+  const q: Record<string, string> = {
+    city: f.city,
+    horizon: f.horizon.toLowerCase(),
+  };
+  if (f.propertyType && f.propertyType !== "any")
+    q.propertyType = f.propertyType;
+  if (f.beds !== "any") q.beds = String(f.beds);
+  if (f.baths !== "any") q.baths = String(f.baths);
+  if (f.sqftMin) q.sqftMin = String(f.sqftMin);
+  if (f.sqftMax) q.sqftMax = String(f.sqftMax);
+  if (f.yearBuilt !== "any") {
+    q.yearBuiltMin = f.yearBuilt;
+    q.yearBuiltMax = f.yearBuilt;
   }
-  ```
+  return new URLSearchParams(q).toString();
+};
+```
 
-- **Notes:**
-  - Show `top_headlines` as clickable list.
-  - Use `label` + `sentiment_index` for sentiment badge.
-  - Optionally plot `trend_30d` as sparkline.
+### One-liner fetch (GET with all filters)
 
----
-
-### 5. PDF Download (Button)
-
-- **Element:** “Download PDF” button (top-right)
-- **API:** `GET /report/{city}.pdf`
-- **Response:** Binary stream → triggers download (`city_report.pdf`).
-- **Notes:**
-  - Currently returns stub PDF.
-  - Later: full report generation.
+```ts
+const res = await fetch(`/forecast?${toParams(filters)}`);
+```
 
 ---
 
 ## ✅ Deliverable
 
-- All 5 UI widgets wired to FastAPI.
-- Mock JSON fully removed.
-- Forecast chart directly powered from **`model_predictions`** table.
-- Confirm working in **Netlify frontend** with live API calls.
+- All UI widgets fetch from FastAPI using the shapes above
+- Mock JSON fully removed
+- Filters are passed as **query params**, not bodies
+- Works on localhost and Netlify → FastAPI
