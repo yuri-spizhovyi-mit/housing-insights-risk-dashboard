@@ -7,8 +7,12 @@ router = APIRouter(prefix="/risk", tags=["risk"])
 def get_risk(city: str):
     # placeholder synthetic example
     return {
-        "city": city,
-        "risk_index": 0.45,
-        "level": "Moderate",
-        "indicators": {"affordability": 0.6, "price_to_rent": 28.5, "inventory": "Low"},
+        "city": "Toronto",
+        "date": "2025-09-21",
+        "score": 62,
+        "breakdown": [
+            {"name": "Affordability", "status": "Tight"},
+            {"name": "Price-to-Rent", "status": "Elevated"},
+            {"name": "Inventory", "status": "Low"},
+        ],
     }
