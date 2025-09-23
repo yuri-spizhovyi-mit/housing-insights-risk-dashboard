@@ -1,14 +1,15 @@
 from fastapi import APIRouter
+from datetime import date
 
 router = APIRouter(prefix="/risk", tags=["risk"])
 
 
-@router.get("/{city}")
+@router.get("")
 def get_risk(city: str):
     # placeholder synthetic example
     return {
-        "city": "Toronto",
-        "date": "2025-09-21",
+        "city": city,
+        "date": date.today().isoformat(),
         "score": 62,
         "breakdown": [
             {"name": "Affordability", "status": "Tight"},
