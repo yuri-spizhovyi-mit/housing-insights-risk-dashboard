@@ -9,7 +9,7 @@ router = APIRouter(prefix="/forecast", tags=["forecast"])
 HORIZON_MAP = {"1y": 12, "2y": 24, "5y": 60, "10y": 120}
 
 
-@router.get("/{city}")
+@router.get("")
 def get_forecast(
     city: str,
     horizon: str = Query("1y", enum=list(HORIZON_MAP.keys())),
@@ -52,12 +52,17 @@ def get_forecast(
     if not rows:
         raise HTTPException(status_code=404, detail=f"No forecast data for {city}")
 
-    return [
-        {
-            "date": row.predict_date.isoformat(),
-            "p50": float(row.yhat),
-            "p80": float(row.yhat_lower) if row.yhat_lower else None,
-            "p95": float(row.yhat_upper) if row.yhat_upper else None,
-        }
-        for row in rows
-    ]
+    return {
+        "city": city,
+        "target": "price",  # or "rent", from row.target
+        "horizon": months,
+        "data": [
+            {
+                "date": row.predict_date.isoformat(),
+                "value": float(row.yhat),
+                "lower": float(row.yhat_lower) if row.yhat_lower else None,
+                "upper": float(row.yhat_upper) if row.yhat_upper else None,
+            }
+            for row in rows
+        ],
+    }
