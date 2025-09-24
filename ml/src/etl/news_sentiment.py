@@ -1,5 +1,6 @@
 """
-Fetch real-estate related news headlines, run sentiment, and load into news_sentiment table.
+Fetch real-estate related news headlines, run sentiment,
+aggregate by (date, city), and load into news_sentiment table.
 """
 
 import os
@@ -35,8 +36,8 @@ def fetch_news():
             records.append(
                 {
                     "date": pd.to_datetime(e.published, errors="coerce").date(),
-                    "city": "Vancouver",  # static for now, could parse from feed if multi-city
-                    "sentiment_score": round(score, 2),
+                    "city": "Vancouver",
+                    "sentiment_score": score,
                     "sentiment_label": label,
                 }
             )
@@ -45,8 +46,32 @@ def fetch_news():
 
 def run(ctx):
     df = fetch_news()
-    df.to_csv(f"{SNAPSHOT_DIR}/news_sentiment.csv", index=False)
-    # Only write the required cols
-    df = df[["date", "city", "sentiment_score", "sentiment_label"]]
-    base.write_df(df, "news_sentiment", ctx)
-    return {"rows": len(df)}
+    if df.empty:
+        print("No news fetched.")
+        return {"rows": 0}
+
+    # ---- Aggregate by (date, city) ----
+    agg = df.groupby(["date", "city"], as_index=False).agg(
+        {
+            "sentiment_score": "mean",
+            "sentiment_label": lambda x: x.mode()[0]
+            if not x.mode().empty
+            else "Neutral",
+        }
+    )
+
+    agg["sentiment_score"] = agg["sentiment_score"].round(2)
+
+    agg.to_csv(f"{SNAPSHOT_DIR}/news_sentiment_daily.csv", index=False)
+
+    base.write_df(agg, "news_sentiment", ctx)
+    return {"rows": len(agg)}
+
+
+if __name__ == "__main__":
+    from types import SimpleNamespace
+    from . import db
+
+    ctx = SimpleNamespace(engine=db.get_engine(), params={})
+    result = run(ctx)
+    print(result)

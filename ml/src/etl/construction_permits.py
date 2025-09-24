@@ -52,3 +52,11 @@ def run(ctx):
 
     base.write_df(tidy, "construction_permits", ctx)
     return {"rows": len(tidy)}
+
+
+if __name__ == "__main__":
+    from . import db
+
+    ctx = db.get_ctx()
+    result = run(ctx)
+    print(result)
