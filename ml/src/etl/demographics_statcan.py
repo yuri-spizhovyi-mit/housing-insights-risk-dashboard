@@ -4,7 +4,7 @@ Fetch population / migration data from StatCan WDS and load into demographics.
 
 import os
 import pandas as pd
-from . import base, statcan_wds
+from .. import base, statcan_wds
 
 SNAPSHOT_DIR = "./.debug/statcan_demographics"
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
