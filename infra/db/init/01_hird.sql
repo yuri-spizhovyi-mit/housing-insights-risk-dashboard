@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS public.model_predictions (
   target              TEXT NOT NULL,
   horizon_months      INTEGER NOT NULL,
   city                TEXT NOT NULL,
+  property_type       TEXT,
+  beds                INTEGER,
+  baths               INTEGER,
+  sqft_min            INTEGER,
+  sqft_max            INTEGER,
+  year_built_min      INTEGER,
+  year_built_max      INTEGER,
   predict_date        DATE NOT NULL,
   yhat                NUMERIC(14,4) NOT NULL,
   yhat_lower          NUMERIC(14,4),
@@ -78,7 +85,6 @@ CREATE TABLE IF NOT EXISTS public.model_predictions (
   created_at          TIMESTAMPTZ DEFAULT now()
 );
 
--- Index for fast lookup by city, target, and horizon
 CREATE INDEX IF NOT EXISTS idx_model_predictions_city_horizon_date
 ON public.model_predictions (city, target, horizon_months, predict_date);
 

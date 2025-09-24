@@ -71,14 +71,22 @@ ON CONFLICT (permit_id) DO NOTHING;
 -- 9) Serving-layer predictions cache (two months)
 -- Note: your schema set PRIMARY KEY on run_id (UUID DEFAULT gen_random_uuid()).
 -- We provide explicit UUIDs via uuid-ossp (uuid_generate_v4()) which is enabled in your DDL.
+-- 9) Serving-layer predictions cache (seeded from JSON structure)
 INSERT INTO public.model_predictions (
-    run_id, model_name, target, horizon_months, city, predict_date,
-    yhat, yhat_lower, yhat_upper, features_version, model_artifact_uri, created_at
+    run_id, model_name, target, horizon_months, city, property_type,
+    beds, baths, sqft_min, sqft_max, year_built_min, year_built_max,
+    predict_date, yhat, yhat_lower, yhat_upper, features_version,
+    model_artifact_uri, created_at
 ) VALUES
-    (uuid_generate_v4(), 'lgbm_price_kelowna_v1', 'rent', 1, 'Kelowna', '2025-08-01',
-     1865.0000, 1770.0000, 1960.0000, 'feat-v1', 's3://minio/models/lgbm_price_kelowna_v1', now()),
-    (uuid_generate_v4(), 'lgbm_price_kelowna_v1', 'rent', 1, 'Kelowna', '2025-09-01',
-     1878.0000, 1784.0000, 1975.0000, 'feat-v1', 's3://minio/models/lgbm_price_kelowna_v1', now())
+    (uuid_generate_v4(), 'synthetic_v1', 'price', 12, 'Vancouver', 'House',
+     3, 2, 1200, 2000, 1990, 2025,
+     '2025-10-01', 950000.0000, 920000.0000, 980000.0000, 'feat-v1',
+     'synthetic', now()),
+    (uuid_generate_v4(), 'synthetic_v1', 'price', 12, 'Toronto', 'Condo',
+     2, 2, 800, 1200, 2000, 2025,
+     '2025-10-01', 750000.0000, 720000.0000, 780000.0000, 'feat-v1',
+     'synthetic', now())
 ON CONFLICT (run_id) DO NOTHING;
+
 
 COMMIT;
