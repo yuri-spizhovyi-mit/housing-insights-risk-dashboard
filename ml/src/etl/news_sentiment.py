@@ -1,5 +1,5 @@
 """
-Fetch real-estate related news headlines, run sentiment, and load into news_sentiment.
+Fetch real-estate related news headlines, run sentiment, and load into news_sentiment table.
 """
 
 import os
@@ -34,11 +34,10 @@ def fetch_news():
             )
             records.append(
                 {
-                    "date": pd.to_datetime(e.published, errors="coerce"),
-                    "city": "Vancouver",
-                    "sentiment_score": score,
+                    "date": pd.to_datetime(e.published, errors="coerce").date(),
+                    "city": "Vancouver",  # static for now, could parse from feed if multi-city
+                    "sentiment_score": round(score, 2),
                     "sentiment_label": label,
-                    "title": e.title,
                 }
             )
     return pd.DataFrame(records)
@@ -46,6 +45,8 @@ def fetch_news():
 
 def run(ctx):
     df = fetch_news()
-    df.to_csv(f"{SNAPSHOT_DIR}/news_raw.csv", index=False)
+    df.to_csv(f"{SNAPSHOT_DIR}/news_sentiment.csv", index=False)
+    # Only write the required cols
+    df = df[["date", "city", "sentiment_score", "sentiment_label"]]
     base.write_df(df, "news_sentiment", ctx)
     return {"rows": len(df)}
