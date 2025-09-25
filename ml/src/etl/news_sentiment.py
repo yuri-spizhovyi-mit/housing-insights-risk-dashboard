@@ -14,12 +14,20 @@ SNAPSHOT_DIR = "./.debug/news"
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
 FEEDS = {
+    "Kelowna": [
+        "https://globalnews.ca/tag/kelowna-real-estate/feed/",
+        "https://okanaganedge.net/feed/",  # local business/real estate
+    ],
     "Vancouver": [
         "https://globalnews.ca/tag/vancouver-real-estate/feed/",
         "https://vancouversun.com/category/real-estate/feed",
     ],
-    # You can add more cities here later
+    "Toronto": [
+        "https://globalnews.ca/tag/toronto-real-estate/feed/",
+        "https://torontostar.com/feed/",  # Toronto Star real estate
+    ],
 }
+
 
 analyzer = SentimentIntensityAnalyzer()
 
