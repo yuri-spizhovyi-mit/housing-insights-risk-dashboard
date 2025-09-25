@@ -123,5 +123,5 @@ if __name__ == "__main__":
     from . import db
 
     ctx = SimpleNamespace(engine=db.get_engine(), params={})
-    result = run(ctx)
-    print(result)
+    output = run(ctx)
+    print(output)
