@@ -12,6 +12,7 @@ HORIZON_MAP = {"1y": 12, "2y": 24, "5y": 60, "10y": 120}
 @router.get("")
 def get_forecast(
     city: str,
+    target: str = Query("price", enum=["price", "rent"]),  # ✅ added target here
     horizon: str = Query("1y", enum=list(HORIZON_MAP.keys())),
     propertyType: str | None = None,
     beds: int | None = None,
