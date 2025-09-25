@@ -1,7 +1,12 @@
 """
-Fetch real-estate related news headlines, run sentiment analysis,
-insert raw headlines into `news_articles` (for UI),
-aggregate by (date, city), and insert into `news_sentiment` (for ML).
+ETL for housing-related news sentiment.
+
+Workflow:
+1. Fetch headlines from configured RSS feeds.
+2. Insert raw rows into `news_articles` (for UI display).
+   - Each headline carries its own sentiment score + label.
+3. Aggregate daily sentiment by (date, city) from `news_articles`
+   and insert into `news_sentiment` (for ML models).
 """
 
 import os
@@ -13,10 +18,11 @@ from . import base
 SNAPSHOT_DIR = "./.debug/news"
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
+# RSS feeds per city (you can extend/change as needed)
 FEEDS = {
     "Kelowna": [
         "https://globalnews.ca/tag/kelowna-real-estate/feed/",
-        "https://okanaganedge.net/feed/",  # local business/real estate
+        "https://okanaganedge.net/feed/",
     ],
     "Vancouver": [
         "https://globalnews.ca/tag/vancouver-real-estate/feed/",
@@ -24,15 +30,14 @@ FEEDS = {
     ],
     "Toronto": [
         "https://globalnews.ca/tag/toronto-real-estate/feed/",
-        "https://torontostar.com/feed/",  # Toronto Star real estate
+        "https://www.thestar.com/content/thestar/feed.RSSManagerServlet.articles.realestate.rss",
     ],
 }
-
 
 analyzer = SentimentIntensityAnalyzer()
 
 
-def fetch_news():
+def fetch_news() -> pd.DataFrame:
     """
     Fetch headlines from configured RSS feeds, analyze sentiment,
     and return a DataFrame with raw article records.
@@ -44,11 +49,14 @@ def fetch_news():
             for e in feed.entries:
                 score = analyzer.polarity_scores(e.title)["compound"]
                 label = "POS" if score > 0.05 else "NEG" if score < -0.05 else "NEU"
+                date_val = pd.to_datetime(
+                    getattr(e, "published", None), errors="coerce"
+                )
+                if pd.isna(date_val):
+                    date_val = pd.Timestamp.today()
                 records.append(
                     {
-                        "date": pd.to_datetime(
-                            getattr(e, "published", None), errors="coerce"
-                        ).date(),
+                        "date": date_val.date(),
                         "city": city,
                         "title": e.title,
                         "url": e.link,
@@ -59,23 +67,27 @@ def fetch_news():
     return pd.DataFrame(records)
 
 
-def run(ctx):
+def update_news_sentiment(ctx):
     """
-    Main ETL entrypoint.
-    - Fetch raw headlines.
-    - Insert raw rows into `news_articles`.
-    - Aggregate sentiment by (date, city) and write to `news_sentiment`.
+    Aggregate daily sentiment from `news_articles` into `news_sentiment`.
+    Uses daily average sentiment_score per (city, date).
     """
-    df = fetch_news()
+    from sqlalchemy import text
+
+    with ctx.engine.begin() as conn:
+        df = pd.read_sql(
+            text("""
+                SELECT date, city, sentiment_score
+                FROM news_articles
+                WHERE date IS NOT NULL
+            """),
+            conn,
+        )
+
     if df.empty:
-        print("No news fetched.")
+        print("No data to aggregate for news_sentiment.")
         return {"rows": 0}
 
-    # ---- Save raw headlines (UI) ----
-    df.to_csv(f"{SNAPSHOT_DIR}/news_articles_raw.csv", index=False)
-    base.write_df(df, "news_articles", ctx)
-
-    # ---- Aggregate by (date, city) (ML) ----
     agg = df.groupby(["date", "city"], as_index=False).agg({"sentiment_score": "mean"})
     agg["sentiment_score"] = agg["sentiment_score"].round(2)
 
@@ -83,6 +95,27 @@ def run(ctx):
     base.write_df(agg, "news_sentiment", ctx)
 
     return {"rows": len(agg)}
+
+
+def run(ctx):
+    """
+    Main ETL entrypoint.
+    - Fetch raw headlines from feeds.
+    - Insert into `news_articles`.
+    - Aggregate from `news_articles` into `news_sentiment`.
+    """
+    df = fetch_news()
+    if df.empty:
+        print("No news fetched.")
+        return {"rows": 0}
+
+    # Save raw headlines
+    df.to_csv(f"{SNAPSHOT_DIR}/news_articles_raw.csv", index=False)
+    base.write_df(df, "news_articles", ctx)
+
+    # Aggregate for ML
+    result = update_news_sentiment(ctx)
+    return result
 
 
 if __name__ == "__main__":
