@@ -153,6 +153,21 @@ CREATE TABLE IF NOT EXISTS public.news_sentiment (
     PRIMARY KEY (date, city)
 );
 
+-- V3__news_articles.sql
+CREATE TABLE IF NOT EXISTS public.news_articles (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL,
+    city VARCHAR(100),
+    title TEXT NOT NULL,
+    url TEXT,
+    sentiment_score DECIMAL(5,2),
+    sentiment_label VARCHAR(20) CHECK (sentiment_label IN ('POS','NEG','NEU'))
+);
+
+-- Helpful index for queries
+CREATE INDEX idx_news_articles_city_date
+    ON public.news_articles (city, date DESC);
+
 
 CREATE TABLE IF NOT EXISTS public.construction_permits (
     permit_id       VARCHAR(255) PRIMARY KEY,
