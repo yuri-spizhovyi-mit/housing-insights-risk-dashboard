@@ -14,6 +14,9 @@ import pandas as pd
 import feedparser
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from . import base
+from datetime import timedelta
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert
 
 SNAPSHOT_DIR = "./.debug/news"
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
@@ -71,6 +74,7 @@ def update_news_sentiment(ctx):
     """
     Aggregate daily sentiment from `news_articles` into `news_sentiment`.
     Uses daily average sentiment_score per (city, date).
+    Performs UPSERT to avoid duplicate key violations.
     """
     from sqlalchemy import text
 
@@ -92,7 +96,21 @@ def update_news_sentiment(ctx):
     agg["sentiment_score"] = agg["sentiment_score"].round(2)
 
     agg.to_csv(f"{SNAPSHOT_DIR}/news_sentiment_daily.csv", index=False)
-    base.write_df(agg, "news_sentiment", ctx)
+
+    # ---- Upsert into news_sentiment ----
+    with ctx.engine.begin() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO news_sentiment (date, city, sentiment_score)
+                VALUES (:date, :city, :score)
+                ON CONFLICT (date, city)
+                DO UPDATE SET sentiment_score = EXCLUDED.sentiment_score;
+            """),
+            [
+                {"date": row.date, "city": row.city, "score": row.sentiment_score}
+                for row in agg.itertuples(index=False)
+            ],
+        )
 
     return {"rows": len(agg)}
 
@@ -101,7 +119,7 @@ def run(ctx):
     """
     Main ETL entrypoint.
     - Fetch raw headlines from feeds.
-    - Insert into `news_articles`.
+    - Insert into `news_articles`, keeping only the last 7 days of data.
     - Aggregate from `news_articles` into `news_sentiment`.
     """
     df = fetch_news()
@@ -109,9 +127,23 @@ def run(ctx):
         print("No news fetched.")
         return {"rows": 0}
 
-    # Save raw headlines
+    # Save raw snapshot for debugging
     df.to_csv(f"{SNAPSHOT_DIR}/news_articles_raw.csv", index=False)
+
+    # Drop duplicates
+    df = df.drop_duplicates(subset=["date", "city", "title"])
+
+    # Insert new headlines
     base.write_df(df, "news_articles", ctx)
+
+    # Keep only last 7 days in news_articles
+    with ctx.engine.begin() as conn:
+        conn.execute(
+            text("""
+            DELETE FROM news_articles
+            WHERE date < CURRENT_DATE - INTERVAL '7 days';
+        """)
+        )
 
     # Aggregate for ML
     result = update_news_sentiment(ctx)
