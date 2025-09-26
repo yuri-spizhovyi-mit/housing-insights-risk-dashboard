@@ -18,6 +18,8 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 
+
+
 SNAPSHOT_DIR = "./.debug/news"
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
@@ -33,6 +35,8 @@ FEEDS = {
     ],
     "Toronto": [
         "https://globalnews.ca/tag/toronto-real-estate/feed/",
+        "https://www.cbc.ca/cmlink/rss-canada-toronto",
+        "https://toronto.ctvnews.ca/rss/Real-Estate",
         "https://www.thestar.com/content/thestar/feed.RSSManagerServlet.articles.realestate.rss",
     ],
 }
