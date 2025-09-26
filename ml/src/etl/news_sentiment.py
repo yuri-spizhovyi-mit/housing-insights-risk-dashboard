@@ -19,7 +19,6 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 
 
-
 SNAPSHOT_DIR = "./.debug/news"
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
@@ -35,9 +34,7 @@ FEEDS = {
     ],
     "Toronto": [
         "https://globalnews.ca/tag/toronto-real-estate/feed/",
-        "https://www.cbc.ca/cmlink/rss-canada-toronto",
         "https://toronto.ctvnews.ca/rss/Real-Estate",
-        "https://www.thestar.com/content/thestar/feed.RSSManagerServlet.articles.realestate.rss",
     ],
 }
 
@@ -78,10 +75,9 @@ def update_news_sentiment(ctx):
     """
     Aggregate daily sentiment from `news_articles` into `news_sentiment`.
     Uses daily average sentiment_score per (city, date).
+    Also derives sentiment_label from the average score.
     Performs UPSERT to avoid duplicate key violations.
     """
-    from sqlalchemy import text
-
     with ctx.engine.begin() as conn:
         df = pd.read_sql(
             text("""
@@ -96,25 +92,40 @@ def update_news_sentiment(ctx):
         print("No data to aggregate for news_sentiment.")
         return {"rows": 0}
 
+    # Aggregate mean score
     agg = df.groupby(["date", "city"], as_index=False).agg({"sentiment_score": "mean"})
     agg["sentiment_score"] = agg["sentiment_score"].round(2)
+
+    # Derive label from average score
+    def score_to_label(score):
+        if score > 0.05:
+            return "POS"
+        elif score < -0.05:
+            return "NEG"
+        return "NEU"
+
+    agg["sentiment_label"] = agg["sentiment_score"].apply(score_to_label)
 
     agg.to_csv(f"{SNAPSHOT_DIR}/news_sentiment_daily.csv", index=False)
 
     # ---- Upsert into news_sentiment ----
     with ctx.engine.begin() as conn:
-        conn.execute(
-            text("""
-                INSERT INTO news_sentiment (date, city, sentiment_score)
-                VALUES (:date, :city, :score)
-                ON CONFLICT (date, city)
-                DO UPDATE SET sentiment_score = EXCLUDED.sentiment_score;
-            """),
-            [
-                {"date": row.date, "city": row.city, "score": row.sentiment_score}
-                for row in agg.itertuples(index=False)
-            ],
-        )
+        for _, row in agg.iterrows():
+            conn.execute(
+                text("""
+                    INSERT INTO news_sentiment (date, city, sentiment_score, sentiment_label)
+                    VALUES (:date, :city, :score, :label)
+                    ON CONFLICT (date, city)
+                    DO UPDATE SET sentiment_score = EXCLUDED.sentiment_score,
+                                  sentiment_label = EXCLUDED.sentiment_label;
+                """),
+                {
+                    "date": row["date"],
+                    "city": row["city"],
+                    "score": row["sentiment_score"],
+                    "label": row["sentiment_label"],
+                },
+            )
 
     return {"rows": len(agg)}
 
@@ -145,7 +156,7 @@ def run(ctx):
         conn.execute(
             text("""
             DELETE FROM news_articles
-            WHERE date < CURRENT_DATE - INTERVAL '7 days';
+            WHERE date < CURRENT_DATE - INTERVAL '90 days';
         """)
         )
 
