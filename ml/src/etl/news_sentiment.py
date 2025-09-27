@@ -141,7 +141,7 @@ def run(ctx):
         print("No news fetched.")
         return {"rows": 0}
 
-    # Save raw snapshot for debugging
+    # Save raw snapshot
     df.to_csv(f"{SNAPSHOT_DIR}/news_articles_raw.csv", index=False)
 
     # Insert into local DB
@@ -157,9 +157,10 @@ def run(ctx):
     with neon_engine.begin() as conn:
         conn.execute(text("DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';"))
 
-    # Aggregate for ML and push to both
-    update_news_sentiment(ctx)                # local
-    update_news_sentiment(neon_engine)        # Neon
+    # Aggregate for ML (local + Neon)
+    update_news_sentiment(ctx)          # local
+    update_news_sentiment(neon_engine)  # Neon
+       # Neon
 
 
 
