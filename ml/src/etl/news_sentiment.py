@@ -134,7 +134,6 @@ def update_news_sentiment(ctx_or_engine):
     return {"rows": len(agg)}
 
 
-
 def run(ctx):
     df = fetch_news()
     if df.empty:
@@ -153,15 +152,22 @@ def run(ctx):
 
     # Keep only 90 days in both
     with ctx.engine.begin() as conn:
-        conn.execute(text("DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';"))
+        conn.execute(
+            text(
+                "DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';"
+            )
+        )
     with neon_engine.begin() as conn:
-        conn.execute(text("DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';"))
+        conn.execute(
+            text(
+                "DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';"
+            )
+        )
 
     # Aggregate for ML (local + Neon)
-    update_news_sentiment(ctx)          # local
+    update_news_sentiment(ctx)  # local
     update_news_sentiment(neon_engine)  # Neon
-       # Neon
-
+    # Neon
 
 
 if __name__ == "__main__":
