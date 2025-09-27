@@ -71,14 +71,18 @@ def fetch_news() -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def update_news_sentiment(ctx):
+def update_news_sentiment(ctx_or_engine):
     """
     Aggregate daily sentiment from `news_articles` into `news_sentiment`.
     Uses daily average sentiment_score per (city, date).
     Also derives sentiment_label from the average score.
     Performs UPSERT to avoid duplicate key violations.
+    Accepts either a Context (with .engine) or a raw SQLAlchemy engine.
     """
-    with ctx.engine.begin() as conn:
+    # Normalize to engine
+    engine = getattr(ctx_or_engine, "engine", ctx_or_engine)
+
+    with engine.begin() as conn:
         df = pd.read_sql(
             text("""
                 SELECT date, city, sentiment_score
@@ -109,7 +113,7 @@ def update_news_sentiment(ctx):
     agg.to_csv(f"{SNAPSHOT_DIR}/news_sentiment_daily.csv", index=False)
 
     # ---- Upsert into news_sentiment ----
-    with ctx.engine.begin() as conn:
+    with engine.begin() as conn:
         for _, row in agg.iterrows():
             conn.execute(
                 text("""
@@ -130,13 +134,8 @@ def update_news_sentiment(ctx):
     return {"rows": len(agg)}
 
 
+
 def run(ctx):
-    """
-    Main ETL entrypoint.
-    - Fetch raw headlines from feeds.
-    - Insert into `news_articles`, keeping only the last 7 days of data.
-    - Aggregate from `news_articles` into `news_sentiment`.
-    """
     df = fetch_news()
     if df.empty:
         print("No news fetched.")
@@ -145,24 +144,23 @@ def run(ctx):
     # Save raw snapshot for debugging
     df.to_csv(f"{SNAPSHOT_DIR}/news_articles_raw.csv", index=False)
 
-    # Drop duplicates
-    df = df.drop_duplicates(subset=["date", "city", "title"])
-
-    # Insert new headlines
+    # Insert into local DB
     base.write_df(df, "news_articles", ctx)
 
-    # Keep only last 7 days in news_articles
-    with ctx.engine.begin() as conn:
-        conn.execute(
-            text("""
-            DELETE FROM news_articles
-            WHERE date < CURRENT_DATE - INTERVAL '90 days';
-        """)
-        )
+    # Insert into Neon DB
+    neon_engine = base.get_neon_engine()
+    base.write_df(df, "news_articles", neon_engine)
 
-    # Aggregate for ML
-    result = update_news_sentiment(ctx)
-    return result
+    # Keep only 90 days in both
+    with ctx.engine.begin() as conn:
+        conn.execute(text("DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';"))
+    with neon_engine.begin() as conn:
+        conn.execute(text("DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';"))
+
+    # Aggregate for ML and push to both
+    update_news_sentiment(ctx)                # local
+    update_news_sentiment(neon_engine)        # Neon
+
 
 
 if __name__ == "__main__":
