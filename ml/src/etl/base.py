@@ -264,3 +264,17 @@ def get_session(ctx: Optional[Context] = None):
     import requests
 
     return requests.Session()
+
+
+def get_neon_engine() -> Engine:
+    """
+    Return a SQLAlchemy engine for Neon cloud database.
+    """
+    neon_url = os.getenv("NEON_DATABASE_URL")
+    if not neon_url:
+        raise RuntimeError("NEON_DATABASE_URL not set in .env")
+    eng = create_engine(neon_url, pool_pre_ping=True, future=True)
+    # optional ping
+    with eng.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return eng
