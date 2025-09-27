@@ -1,28 +1,31 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
+from services.fapi.db import get_db
+from services.fapi.models.news import NewsArticle  # ✅ import here
 
 router = APIRouter(prefix="/sentiment", tags=["sentiment"])
 
 
 @router.get("")
-def get_sentiment(city: str):
-    # Placeholder synthetic response — later connect to news_sentiment table
+def get_sentiment(city: str, db: Session = Depends(get_db)):
+    rows = (
+        db.query(NewsArticle)
+        .filter(NewsArticle.city == city)
+        .order_by(desc(NewsArticle.date), desc(NewsArticle.id))
+        .limit(3)
+        .all()
+    )
+
     return {
         "city": city,
         "items": [
             {
-                "date": "2025-08-29",
-                "headline": "New supply targets announced",
-                "sentiment": "NEU",
-            },
-            {
-                "date": "2025-08-14",
-                "headline": "Rate cuts delayed; affordability worsens",
-                "sentiment": "NEG",
-            },
-            {
-                "date": "2025-07-28",
-                "headline": f"{city} rental demand rises",
-                "sentiment": "POS",
-            },
+                "date": r.date.isoformat(),
+                "headline": r.title,
+                "sentiment": r.sentiment_label,
+                "url": r.url,
+            }
+            for r in rows
         ],
     }
