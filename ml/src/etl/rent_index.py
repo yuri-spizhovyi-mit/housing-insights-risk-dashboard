@@ -2,7 +2,7 @@
 import pandas as pd
 from datetime import datetime
 from sqlalchemy import text
-from ml.utils.db import get_engine
+from ml.src.etl.db import get_engine
 
 
 def fetch_rent_data(ctx):
@@ -64,6 +64,7 @@ def write_rent_index(df, ctx):
                     active_rental_count = EXCLUDED.active_rental_count,
                     avg_rental_days = EXCLUDED.avg_rental_days
             """),
+                *row.to_dict().values(),
                 {
                     "date": row["date"],
                     "city": row["city"],

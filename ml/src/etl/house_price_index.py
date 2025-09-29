@@ -1,7 +1,7 @@
 # ml/src/etl/house_price_index.py
 import pandas as pd
 from sqlalchemy import text
-from ml.utils.db import get_engine
+from ml.src.etl.db import get_engine
 
 
 def fetch_sales_data(ctx):
