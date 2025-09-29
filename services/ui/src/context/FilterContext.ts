@@ -8,7 +8,11 @@ export type State = {
   baths: string;
   sqftMin: number;
   sqftMax: number;
-  yearBuilt: string;
+  yearBuilt?: string;
+};
+
+export type FilterContextType = State & {
+  target: string;
 };
 
 export type Action =
@@ -22,13 +26,13 @@ export type Action =
   | { type: "RESET" };
 
 export const initialState: State = {
-  city: "Kelowna",
-  horizon: "5Y",
-  propertyType: "Condo",
-  beds: "any",
-  baths: "any",
-  sqftMin: 500,
-  sqftMax: 4000,
+  city: "Vancouver",
+  horizon: "1Y",
+  propertyType: "House",
+  beds: "3",
+  baths: "2",
+  sqftMin: 1200,
+  sqftMax: 3000,
   yearBuilt: "any",
 };
 

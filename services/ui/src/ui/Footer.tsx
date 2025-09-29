@@ -1,8 +1,8 @@
 function Footer() {
   return (
-    <footer className="py-9 bg-black">
+    <footer className="py-9">
       <div className="flex justify-between  px-6">
-        <p>
+        <p className="text-amber-50">
           Developed by{" "}
           <a
             href="https://maxdev.website"

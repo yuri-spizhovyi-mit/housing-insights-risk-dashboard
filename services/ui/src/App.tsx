@@ -5,26 +5,28 @@ import RiskGauge from "./features/risk-gauge/RiskGauge";
 import SentimentAndNews from "./features/sentiment-and-news/SentimentAndNews";
 import WireframeNotes from "./features/wireframe-notes/WireframeNotes";
 import { useSmoothScroll } from "./hooks/useSmoothScroll";
-import ContainerGrid from "./ui/ContainerGrid";
+import Dashboard from "./ui/Dashboard";
 import Footer from "./ui/Footer";
 import Header from "./ui/Header";
 import Main from "./ui/Main";
+import Subheader from "./ui/Subheader";
 
 function App() {
   useSmoothScroll();
 
   return (
     <>
+      <Subheader />
       <Header />
       <Main>
         <FilterManager />
-        <ContainerGrid>
+        <Dashboard>
           <HomePriceForecast />
           <RiskGauge />
           <RentForecast />
           <SentimentAndNews />
           <WireframeNotes />
-        </ContainerGrid>
+        </Dashboard>
         <Footer />
       </Main>
     </>
