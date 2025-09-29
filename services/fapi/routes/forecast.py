@@ -15,8 +15,8 @@ def get_forecast(
     target: str = Query("price", enum=["price", "rent"]),
     horizon: str = Query("1y", enum=list(HORIZON_MAP.keys())),
     propertyType: str | None = None,
-    beds: int | None = None,  # use -1 to represent "Any"
-    baths: int | None = None,  # use -1 to represent "Any"
+    beds: int | None = Query(-1, description="Number of beds, -1 = Any"),
+    baths: int | None = Query(-1, description="Number of baths, -1 = Any"),
     sqftMin: int | None = None,
     sqftMax: int | None = None,
     yearBuiltMin: int | None = None,
@@ -38,19 +38,17 @@ def get_forecast(
     if propertyType:
         query = query.filter(ModelPrediction.property_type == propertyType)
 
-    # Beds filter (supporting "Any" -> -1 sentinel)
-    if beds is not None:
-        if beds == -1:
-            query = query.filter(ModelPrediction.beds.is_(None))
-        else:
-            query = query.filter(ModelPrediction.beds == beds)
+    # Beds filter (default Any -> NULL)
+    if beds == -1:
+        query = query.filter(ModelPrediction.beds.is_(None))
+    else:
+        query = query.filter(ModelPrediction.beds == beds)
 
-    # Baths filter (supporting "Any" -> -1 sentinel)
-    if baths is not None:
-        if baths == -1:
-            query = query.filter(ModelPrediction.baths.is_(None))
-        else:
-            query = query.filter(ModelPrediction.baths == baths)
+    # Baths filter (default Any -> NULL)
+    if baths == -1:
+        query = query.filter(ModelPrediction.baths.is_(None))
+    else:
+        query = query.filter(ModelPrediction.baths == baths)
 
     if sqftMin:
         query = query.filter(ModelPrediction.sqft_min >= sqftMin)
@@ -66,17 +64,20 @@ def get_forecast(
     if not rows:
         raise HTTPException(status_code=404, detail=f"No forecast data for {city}")
 
-    return {
-        "city": city,
-        "target": target,
-        "horizon": months,
-        "data": [
-            {
+    # Return only one row per date (dedup safeguard)
+    data_by_date = {}
+    for row in rows:
+        if row.predict_date not in data_by_date:
+            data_by_date[row.predict_date] = {
                 "date": row.predict_date.isoformat(),
                 "value": float(row.yhat),
                 "lower": float(row.yhat_lower) if row.yhat_lower is not None else None,
                 "upper": float(row.yhat_upper) if row.yhat_upper is not None else None,
             }
-            for row in rows
-        ],
+
+    return {
+        "city": city,
+        "target": target,
+        "horizon": months,
+        "data": list(data_by_date.values()),
     }
