@@ -5,6 +5,7 @@ interface ButtonProps {
   className?: string;
   leftIcon?: ReactNode;
   rightIcon?: ReactNode;
+  onClick?: () => void;
 }
 
 function Button({
@@ -12,9 +13,13 @@ function Button({
   leftIcon,
   rightIcon,
   className = "",
+  onClick,
 }: ButtonProps) {
   return (
-    <button className={`flex cursor-pointer items-center gap-2 ${className}`}>
+    <button
+      onClick={onClick}
+      className={`flex cursor-pointer items-center gap-2 ${className}`}
+    >
       {leftIcon} {children} {rightIcon}
     </button>
   );
