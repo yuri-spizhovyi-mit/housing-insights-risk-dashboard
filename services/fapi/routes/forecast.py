@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
 from sqlalchemy.orm import Session
-from services.fapi.db import get_db  # ✅
-from services.fapi.models.model_predictions import ModelPrediction  # ✅
+from services.fapi.db import get_db
+from services.fapi.models.model_predictions import ModelPrediction
 from datetime import date, timedelta
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
@@ -12,11 +12,11 @@ HORIZON_MAP = {"1y": 12, "2y": 24, "5y": 60, "10y": 120}
 @router.get("")
 def get_forecast(
     city: str,
-    target: str = Query("price", enum=["price", "rent"]),  # ✅ added target here
+    target: str = Query("price", enum=["price", "rent"]),
     horizon: str = Query("1y", enum=list(HORIZON_MAP.keys())),
     propertyType: str | None = None,
-    beds: int | None = None,
-    baths: int | None = None,
+    beds: int | None = None,  # use -1 to represent "Any"
+    baths: int | None = None,  # use -1 to represent "Any"
     sqftMin: int | None = None,
     sqftMax: int | None = None,
     yearBuiltMin: int | None = None,
@@ -29,16 +29,29 @@ def get_forecast(
 
     query = db.query(ModelPrediction).filter(
         ModelPrediction.city == city,
+        ModelPrediction.target == target,
+        ModelPrediction.horizon_months == months,
         ModelPrediction.predict_date >= start_date,
         ModelPrediction.predict_date <= end_date,
     )
 
     if propertyType:
         query = query.filter(ModelPrediction.property_type == propertyType)
-    if beds:
-        query = query.filter(ModelPrediction.beds == beds)
-    if baths:
-        query = query.filter(ModelPrediction.baths == baths)
+
+    # Beds filter (supporting "Any" -> -1 sentinel)
+    if beds is not None:
+        if beds == -1:
+            query = query.filter(ModelPrediction.beds.is_(None))
+        else:
+            query = query.filter(ModelPrediction.beds == beds)
+
+    # Baths filter (supporting "Any" -> -1 sentinel)
+    if baths is not None:
+        if baths == -1:
+            query = query.filter(ModelPrediction.baths.is_(None))
+        else:
+            query = query.filter(ModelPrediction.baths == baths)
+
     if sqftMin:
         query = query.filter(ModelPrediction.sqft_min >= sqftMin)
     if sqftMax:
@@ -55,14 +68,14 @@ def get_forecast(
 
     return {
         "city": city,
-        "target": "price",  # or "rent", from row.target
+        "target": target,
         "horizon": months,
         "data": [
             {
                 "date": row.predict_date.isoformat(),
                 "value": float(row.yhat),
-                "lower": float(row.yhat_lower) if row.yhat_lower else None,
-                "upper": float(row.yhat_upper) if row.yhat_upper else None,
+                "lower": float(row.yhat_lower) if row.yhat_lower is not None else None,
+                "upper": float(row.yhat_upper) if row.yhat_upper is not None else None,
             }
             for row in rows
         ],
