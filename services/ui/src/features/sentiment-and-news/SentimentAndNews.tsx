@@ -1,6 +1,6 @@
 import { useFilters } from "../../context/FilterContext";
-import ErrorMessage from "../../ui/Message";
 import Frame from "../../ui/Frame";
+import Message from "../../ui/Message";
 import NewsItem from "./NewsItem";
 import SentimentAndNewsHeader from "./SentimentAndNewsHeader";
 import { useSentiments } from "./useSentiments";
@@ -12,7 +12,11 @@ function SentimentAndNews() {
   return (
     <Frame className="col-span-12 lg:col-span-4 text-amber-50">
       {error ? (
-        <ErrorMessage message={error.message} />
+        <Message
+          type={error.type}
+          message={error.message}
+          details={error.details}
+        />
       ) : (
         <>
           <SentimentAndNewsHeader />
