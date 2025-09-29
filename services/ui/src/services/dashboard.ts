@@ -1,4 +1,5 @@
 import type { FilterContextType } from "../context/FilterContext";
+import { ApiError } from "./errors";
 
 type CitiesResponse = {
   cities: string[];
@@ -10,7 +11,7 @@ export async function getCities(): Promise<string[]> {
   );
 
   if (!res.ok) {
-    throw new Error(`Failed to fetch cities.`);
+    throw new Error("Failed to fetch cities.");
   }
 
   const data: CitiesResponse = await res.json();
@@ -28,24 +29,40 @@ export async function getForecast(filters: FilterContextType) {
   if (filters.propertyType && filters.propertyType !== "Any") {
     params.append("propertyType", filters.propertyType);
   }
-
   if (filters.beds && filters.beds !== "Any") {
     params.append("beds", filters.beds);
   }
-
   if (filters.baths && filters.baths !== "Any") {
     params.append("baths", filters.baths);
   }
 
-  const url = `https://housing-insights-risk-dashboard.vercel.app/forecast?${params.toString()}`;
-  console.log(url);
-  const res = await fetch(url);
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://housing-insights-risk-dashboard.vercel.app/forecast?${params.toString()}`
+    );
+  } catch {
+    throw new ApiError(
+      "error",
+      "Failed to fetch forecast",
+      "Could not reach the forecast server. Please check your connection."
+    );
+  }
+
+  if (res.status === 404) {
+    throw new ApiError(
+      "empty",
+      "No forecast data available",
+      `We don’t have results for ${filters.city}, ${filters.propertyType}, max:${filters.sqftMin} - min:${filters.sqftMax} sqft. Try adjusting filters.`
+    );
+  }
 
   if (!res.ok) {
-    throw new Error(`Forecast, for city ${filters.city} request failed!`);
-    console.clear();
-    console.error(`Forecast request failed: ${res.status}`);
-    console.log(res);
+    throw new ApiError(
+      "error",
+      "Something went wrong",
+      "Server is unavailable, please try again later."
+    );
   }
 
   return res.json();

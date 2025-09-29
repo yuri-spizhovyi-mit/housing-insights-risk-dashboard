@@ -1,5 +1,5 @@
 import { useFilters } from "../../context/FilterContext";
-import ErrorMessage from "../../ui/ErrorMessage";
+import ErrorMessage from "../../ui/Message";
 import Frame from "../../ui/Frame";
 import NewsItem from "./NewsItem";
 import SentimentAndNewsHeader from "./SentimentAndNewsHeader";

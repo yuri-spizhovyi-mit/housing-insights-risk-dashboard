@@ -8,20 +8,24 @@ import {
 } from "recharts";
 import Frame from "../../ui/Frame";
 import HomePriceForecastHeader from "./HomePriceForecastHeader";
-import { useHomePriceForecast } from "./useHomePriceForecast";
 import { useFilters } from "../../context/FilterContext";
-import ErrorMessage from "../../ui/ErrorMessage";
+import Message from "../../ui/Message";
+import { useForecast } from "../../hooks/useForecast";
 
 function HomePriceForecast() {
   const filters = useFilters();
-  const { forecast, error, isFetching } = useHomePriceForecast(filters);
+  const { forecast, error, isFetching } = useForecast(filters, "price");
 
   return (
     <Frame className="col-span-12 lg:col-span-8 opacity-100">
       <HomePriceForecastHeader />
 
       {error ? (
-        <ErrorMessage message={error.message} />
+        <Message
+          type={error.type}
+          message={error.message}
+          details={error.details}
+        />
       ) : isFetching ? (
         <p className="text-gray-400">Fetching forecast…</p>
       ) : (
@@ -66,7 +70,7 @@ function HomePriceForecast() {
               />
               <YAxis
                 tickFormatter={(val) => `$${val.toLocaleString()}`}
-                tick={{ fontSize: 12, fill: "#a3a3a3", dx: -12 }}
+                tick={{ fontSize: 12, fill: "#a3a3a3", dx: -4 }}
                 tickLine
                 axisLine={{ stroke: "#333" }}
               />
@@ -77,9 +81,13 @@ function HomePriceForecast() {
                   fontSize: "15px",
                 }}
                 labelStyle={{ color: "#60a5fa" }}
-                formatter={(value: number) => [
+                formatter={(value: number, name: string) => [
                   `$${value.toLocaleString()}`,
-                  "Price",
+                  name === "upper"
+                    ? "Upper Price"
+                    : name === "lower"
+                    ? "Lower Price"
+                    : "Price",
                 ]}
                 labelFormatter={(date) =>
                   new Date(date).toLocaleDateString("en-US", {
