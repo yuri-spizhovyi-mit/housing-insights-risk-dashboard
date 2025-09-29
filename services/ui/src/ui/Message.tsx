@@ -12,7 +12,7 @@ function Message({ type, message, details }: MessageProps) {
 
   return (
     <div
-      className={`flex items-start gap-3 rounded-xl border p-4 text-sm shadow-md ${
+      className={`flex items-start gap-3 rounded-xl border p-4 text-sm shadow-md size-full ${
         isError
           ? "border-red-400/40 bg-red-900/30 text-red-200"
           : "border-blue-400/30 bg-blue-900/20 text-blue-200"

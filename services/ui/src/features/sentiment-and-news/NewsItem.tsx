@@ -1,4 +1,4 @@
-import type { SentimentData } from "../../types/sentiments.types";
+import type { Sentiment, SentimentValue } from "../../types/sentiments.types";
 
 const toneClasses = {
   POS: "border-emerald-400 text-emerald-300",
@@ -6,8 +6,8 @@ const toneClasses = {
   NEU: "border-neutral-600 text-neutral-300",
 };
 
-function NewsItem({ headline, sentiment, date }: SentimentData) {
-  const formatedSentiment = sentiment.toUpperCase() as keyof typeof toneClasses;
+function NewsItem({ headline, sentiment, date }: Sentiment) {
+  const formatedSentiment = sentiment.toUpperCase() as SentimentValue;
   return (
     <li className="rounded-xl border border-neutral-800 p-3 bg-neutral-950">
       <div className="text-sm font-medium line-clamp-1 mb-2">{headline}</div>

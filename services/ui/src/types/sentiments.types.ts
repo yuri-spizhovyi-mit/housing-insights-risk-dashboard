@@ -1,11 +1,13 @@
-export type SentimentsData = {
-  city: string;
-  items: Array<SentimentData>;
-};
+export type SentimentValue = "NEG" | "NEU" | "POS";
 
-export type SentimentData = {
+export type Sentiment = {
   date: string;
   headline: string;
-  sentiment: "NEG" | "NEU" | "POS";
+  sentiment: SentimentValue;
   url: string;
+};
+
+export type CitySentiments = {
+  city: string;
+  items: Sentiment[];
 };

@@ -1,5 +1,7 @@
+import type { CitySentiments } from "../types/sentiments.types";
 import type { FilterContextType } from "../context/FilterContext";
 import { ApiError } from "./errors";
+import type { CityInsight } from "../types/risk.types";
 
 type CitiesResponse = {
   cities: string[];
@@ -53,7 +55,7 @@ export async function getForecast(filters: FilterContextType) {
     throw new ApiError(
       "empty",
       "No forecast data available",
-      `We don’t have results for ${filters.city}, ${filters.propertyType}, max:${filters.sqftMin} - min:${filters.sqftMax} sqft. Try adjusting filters.`
+      `We don’t have results for ${filters.city}, ${filters.propertyType}, max:${filters.sqftMin} - min:${filters.sqftMax} sqft, horizon:${filters.horizon}Y. Try adjusting filters.`
     );
   }
 
@@ -65,5 +67,41 @@ export async function getForecast(filters: FilterContextType) {
     );
   }
 
-  return res.json();
+  const data = await res.json();
+  return data;
+}
+
+export async function getSentiments(city: string): Promise<CitySentiments> {
+  const res = await fetch(
+    `https://housing-insights-risk-dashboard.vercel.app/sentiment?city=${city}`
+  );
+  console.log(city);
+
+  if (!res.ok) {
+    throw new ApiError(
+      "error",
+      "Something went wrong",
+      "Server is unavailable, please try again later."
+    );
+  }
+
+  const data = await res.json();
+  return data;
+}
+
+export async function getRiskGauge(city: string): Promise<CityInsight> {
+  const res = await fetch(
+    `https://housing-insights-risk-dashboard.vercel.app/risk?city=${city}`
+  );
+
+  if (!res.ok) {
+    throw new ApiError(
+      "error",
+      "Something went wrong",
+      "Server is unavailable, please try again later."
+    );
+  }
+
+  const data = await res.json();
+  return data;
 }

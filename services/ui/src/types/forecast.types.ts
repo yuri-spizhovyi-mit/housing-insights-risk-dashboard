@@ -5,7 +5,7 @@ export type ForecastPoint = {
   upper: number;
 };
 
-export type ForecastResponse = {
+export type Forecast = {
   city: string;
   target: string;
   horizon: number;

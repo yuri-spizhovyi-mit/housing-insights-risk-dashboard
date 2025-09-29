@@ -4,7 +4,7 @@ import FilterSelector from "./FilterSelector";
 
 function BedsSelector() {
   const { dispatch, beds } = useFilters();
-  const quant = ["Any", "1", "2", "3+"];
+  const quant = ["Any", "1", "2", "3"];
 
   return (
     <SelectorShell type="Beds" className="px-6">
