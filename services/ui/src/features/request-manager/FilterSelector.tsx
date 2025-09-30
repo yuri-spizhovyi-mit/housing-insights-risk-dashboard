@@ -13,7 +13,7 @@ function FilterSelector({
     <select
       value={value}
       onChange={(e) => handleValueUpdate(e.target.value)}
-      className="bg-transparent focus:outline-none px-1"
+      className="bg-transparent focus:outline-none px-1 text-sm sm:text-sm"
     >
       {data.map((val) => (
         <option key={val} value={val} className="bg-neutral-900">

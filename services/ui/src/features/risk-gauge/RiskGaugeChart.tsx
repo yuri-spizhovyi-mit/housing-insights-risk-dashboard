@@ -12,7 +12,7 @@ function RiskGaugeChart({ riskScore }: RiskGaugeChartProps) {
 
   return (
     <div className="flex-[0.5] h-full w-full flex items-center justify-center">
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={140}>
         <PieChart>
           <Pie
             data={riskData}

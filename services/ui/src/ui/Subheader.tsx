@@ -2,9 +2,9 @@ import { Info } from "lucide-react";
 
 function Subheader() {
   return (
-    <div className="bg-gradient-to-r from-purple-900 via-blue-900 to-indigo-900 border-b border-purple-700 py-3 text-center">
-      <div className="flex items-center justify-center gap-2">
-        <Info className="size-4 text-cyan-300" />
+    <div className="px-8 bg-gradient-to-r from-purple-900 via-blue-900 to-indigo-900 border-b border-purple-700 py-3">
+      <div className="flex items-center justify-center gap-3">
+        <Info className="size-4 text-cyan-300 inline-block" />
         <p className="text-cyan-50 text-sm">
           Read more about team and project development{" "}
           <a

@@ -14,9 +14,9 @@ function FilterManager() {
         <CitySelector />
         <HorizonSelector />
         <PropertyTypeSelector />
+        <SqrtRangeSelector />
         <BedsSelector />
         <BathsSelector />
-        <SqrtRangeSelector />
         <PredictTrigger />
       </FilterContainer>
     </section>

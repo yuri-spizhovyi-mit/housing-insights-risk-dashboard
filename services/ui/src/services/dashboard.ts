@@ -75,7 +75,6 @@ export async function getSentiments(city: string): Promise<CitySentiments> {
   const res = await fetch(
     `https://housing-insights-risk-dashboard.vercel.app/sentiment?city=${city}`
   );
-  console.log(city);
 
   if (!res.ok) {
     throw new ApiError(

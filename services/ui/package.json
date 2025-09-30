@@ -22,6 +22,7 @@
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-loading-skeleton": "^3.5.0",
     "recharts": "^3.2.0",
     "tailwind-scrollbar": "^4.0.2",
     "vite-plugin-eslint": "^1.8.1"
