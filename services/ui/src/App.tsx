@@ -6,7 +6,6 @@ import SentimentAndNews from "./features/sentiment-and-news/SentimentAndNews";
 import WireframeNotes from "./features/wireframe-notes/WireframeNotes";
 import { useSmoothScroll } from "./hooks/useSmoothScroll";
 import Dashboard from "./ui/Dashboard";
-import Footer from "./ui/Footer";
 import Header from "./ui/Header";
 import Main from "./ui/Main";
 import Subheader from "./ui/Subheader";
@@ -27,7 +26,6 @@ function App() {
           <SentimentAndNews />
           <WireframeNotes />
         </Dashboard>
-        <Footer />
       </Main>
     </>
   );
