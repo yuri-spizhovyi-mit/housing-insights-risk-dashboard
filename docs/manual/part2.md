@@ -11,9 +11,9 @@ Formally, the price is modeled as a function of characteristics, allowing us to 
 ### 4.2 Interpretation of Model Components (α, β, ε)
 The general HPM equation:  
 
-\[
-P_i = \alpha + \beta_1 X_{i1} + \beta_2 X_{i2} + \dots + \beta_k X_{ik} + \varepsilon_i
-\]
+$$
+P_i = lpha + eta_1 X_{i1} + eta_2 X_{i2} + \dots + eta_k X_{ik} + arepsilon_i
+$$
 
 - **P_i**: observed price of house *i*.  
 - **α (alpha)**: intercept → baseline value of a hypothetical “zero-feature” house (not realistic, but anchors the regression).  
@@ -72,9 +72,10 @@ The **Repeat-Sales Model (RSM)** isolates pure price appreciation by comparing s
 By differencing prices of identical homes across transactions, RSM removes the need to observe all attributes.
 
 ### 5.2 Mathematical Formulation
-\[
-\ln(P_{i,t_2}) - \ln(P_{i,t_1}) = \sum_{j} \beta_j D_{j} + \varepsilon_i
-\]
+
+$$
+\ln(P_{i,t_2}) - \ln(P_{i,t_1}) = \sum_{j} eta_j D_{j} + arepsilon_i
+$$
 
 - **ln(P_{i,t₂}) - ln(P_{i,t₁})**: log price change of house *i* between sale at *t₁* and resale at *t₂*.  
 - **D_j**: dummy variables for time periods.  
@@ -118,17 +119,47 @@ HPM and RSM capture partial aspects of housing markets. Hybrid econometric model
 ### 6.2 Panel Data Models
 - Combine cross-sectional (different houses/regions) and time-series dimensions.  
 - Control for **fixed effects** (unobserved heterogeneity).  
-- Example: Price_it = α + βX_it + μ_i + γ_t + ε_it.
+
+General form:
+
+$$
+Price_{it} = lpha + eta X_{it} + \mu_i + \lambda_t + arepsilon_{it}
+$$
+
+- *i* = property  
+- *t* = time  
+- X_it = observed attributes  
+- μ_i = property-specific fixed effect  
+- λ_t = time fixed effect  
+- ε_it = error term  
 
 ### 6.3 Vector Autoregression (VAR)
 - Treats multiple time series (e.g., prices, rents, interest rates, income) as endogenous.  
 - Each variable is regressed on its own lags and lags of others.  
-- Captures **dynamic feedback** (e.g., rates affect prices, which affect starts, which affect rents).
+
+Example:
+
+$$
+HP_t = a_1 + b_{11}HP_{t-1} + b_{12}IR_{t-1} + b_{13}Y_{t-1} + arepsilon_{1t}
+$$
+
+$$
+IR_t = a_2 + b_{21}HP_{t-1} + b_{22}IR_{t-1} + b_{23}Y_{t-1} + arepsilon_{2t}
+$$
+
+$$
+Y_t = a_3 + b_{31}HP_{t-1} + b_{32}IR_{t-1} + b_{33}Y_{t-1} + arepsilon_{3t}
+$$
 
 ### 6.4 Error-Correction Models (ECM)
 - Recognize that housing markets have long-run equilibria (income-to-price ratios, rent-price parity).  
 - Short-run deviations corrected gradually via adjustment terms.  
-- Example: ΔPrice_t = α(Price* - Price_t-1) + βΔX_t + ε_t.
+
+Example:
+
+$$
+\Delta Price_t = lpha (Price^* - Price_{t-1}) + eta \Delta X_t + arepsilon_t
+$$
 
 ### 6.5 Comparison of Hybrid Models
 | Model | Strength | Weakness |
