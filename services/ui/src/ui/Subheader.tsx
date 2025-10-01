@@ -8,7 +8,8 @@ function Subheader() {
         <p className="text-cyan-50 text-sm">
           Read more about team and project development{" "}
           <a
-            href="#"
+            href="https://github.com/yuri-spizhovyi-mit/housing-insights-risk-dashboard"
+            target="_blank"
             className="text-cyan-300 hover:text-cyan-200 underline underline-offset-2 transition-colors font-medium"
           >
             here
