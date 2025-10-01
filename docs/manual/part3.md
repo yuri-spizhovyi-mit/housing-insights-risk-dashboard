@@ -25,6 +25,7 @@ Gini(S) = 1 - \sum_{i=1}^k p_i^2
 $$
 
 Information Gain:
+
 $$
 IG(S, A) = H(S) - \sum_{v \in Values(A)} \frac{|S_v|}{|S|} H(S_v)
 $$
@@ -45,6 +46,7 @@ $$
 Random Forests build **B** trees on bootstrapped samples and average their predictions.
 
 Formula:
+
 $$
 \hat{f}(x) = \frac{1}{B} \sum_{b=1}^B T_b(x)
 $$
@@ -82,6 +84,7 @@ Boosting builds models sequentially, where each new model corrects errors from t
 ### 8.2 Gradient Boosting Concept
 
 General update rule:
+
 $$
 F_m(x) = F_{m-1}(x) + \gamma_m h_m(x)
 $$
@@ -92,11 +95,13 @@ where $h_m(x)$ is the weak learner (usually a shallow tree) and $\gamma_m$ is th
 We fit $h_m$ to the **negative gradient of the loss function**.
 
 Example: For squared error loss,
+
 $$
 L(y, F(x)) = (y - F(x))^2
 $$
 
 The gradient is:
+
 $$
 r_{im} = - \frac{\partial L(y_i, F(x_i))}{\partial F(x_i)} = y_i - F_{m-1}(x_i)
 $$
@@ -127,6 +132,7 @@ Neural Networks are powerful universal function approximators capable of capturi
 ### 9.2 Forward Propagation
 
 For layer $l$:
+
 $$
 z^{[l]} = W^{[l]} a^{[l-1]} + b^{[l]}
 $$
@@ -172,6 +178,7 @@ Dedicated time series models are crucial for forecasting housing prices and rent
 ### 10.2 ARIMA
 
 General form:
+
 $$
 \phi(B)(1-B)^d y_t = 	heta(B)\varepsilon_t
 $$
@@ -184,6 +191,7 @@ $$
 ### 10.3 Prophet
 
 Additive model:
+
 $$
 y(t) = g(t) + s(t) + h(t) + \varepsilon_t
 $$
@@ -198,31 +206,37 @@ $$
 LSTM gates:
 
 Forget gate:
+
 $$
 f_t = \sigma(W_f [h_{t-1}, x_t] + b_f)
 $$
 
 Input gate:
+
 $$
 i_t = \sigma(W_i [h_{t-1}, x_t] + b_i)
 $$
 
 Cell state:
+
 $$
 	ilde{C}_t = 	anh(W_c [h_{t-1}, x_t] + b_c)
 $$
 
 Update:
+
 $$
 C_t = f_t \cdot C_{t-1} + i_t \cdot 	ilde{C}_t
 $$
 
 Output gate:
+
 $$
 o_t = \sigma(W_o [h_{t-1}, x_t] + b_o)
 $$
 
 Hidden state:
+
 $$
 h_t = o_t \cdot 	anh(C_t)
 $$

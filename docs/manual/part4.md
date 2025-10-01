@@ -13,6 +13,7 @@ Risk indices and confidence intervals quantify the robustness of predictions.
 A risk index aggregates multiple indicators (affordability, leverage, volatility) into one score.
 
 General form:
+
 $$
 RiskIndex_t = w_1 \cdot Affordability_t + w_2 \cdot Leverage_t + w_3 \cdot Volatility_t
 $$
@@ -28,6 +29,7 @@ where weights $w_i$ reflect importance.
 Confidence intervals quantify the range of likely outcomes.
 
 General form (normal approximation):
+
 $$
 CI = \hat{y} \pm z_{\alpha/2} \cdot \frac{\sigma}{\sqrt{n}}
 $$
@@ -50,6 +52,7 @@ Algorithm:
 4. Summarize distribution of outcomes.
 
 Mathematically:
+
 $$
 \hat{y}_t^{(m)} = f(X_t, \varepsilon^{(m)}), \quad m=1,\dots,M
 $$
@@ -81,6 +84,7 @@ Scenario analysis explores "what-if" cases.
 Example: A 2% interest rate hike.
 
 Impact on mortgage payment (annuity formula):
+
 $$
 M = P \cdot \frac{r(1+r)^n}{(1+r)^n - 1}
 $$
@@ -96,6 +100,7 @@ Stress tests push models to extremes, asking: **what if the worst happens?**
 Example: A 30% house price drop.
 
 Price under stress:
+
 $$
 P_{stress} = P_{current} \cdot (1 - 0.30)
 $$
