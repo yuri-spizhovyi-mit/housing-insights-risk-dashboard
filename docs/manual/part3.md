@@ -13,11 +13,13 @@ Decision Trees are interpretable, rule-based models that split data into regions
 Decision Trees split nodes based on purity measures like **Entropy** and **Gini Index**.
 
 Entropy:
+
 $$
 H(S) = - \sum_{i=1}^k p_i \log_2 p_i
 $$
 
 Gini Index:
+
 $$
 Gini(S) = 1 - \sum_{i=1}^k p_i^2
 $$
