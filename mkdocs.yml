@@ -1,12 +1,35 @@
+site_name: Housing Insights & Risk Dashboard Manual
+site_description: A comprehensive guide to econometric, machine learning, and risk approaches in housing forecasting.
+site_author: Yuriy Spizhovyi
+
 theme:
   name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - content.code.copy
+    - content.code.annotate
 
 markdown_extensions:
+  - admonition
+  - footnotes
+  - toc:
+      permalink: true
+  - tables
   - pymdownx.arithmatex:
       generic: true
+  - pymdownx.superfences
+  - pymdownx.details
 
 extra_javascript:
-  - https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js
-  - https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js
-extra_css:
-  - https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: docs/manual/index.md
+  - Part I: docs/manual/part1.md
+  - Part II: docs/manual/part2.md
+  - Part III: docs/manual/part3.md
+  - Part IV: docs/manual/part4.md
+  - Part V: docs/manual/part5.md
