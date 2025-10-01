@@ -16,12 +16,12 @@ P_i = lpha + eta_1 X_{i1} + eta_2 X_{i2} + \dots + eta_k X_{ik} + arepsilon
 $$
 
 - **P_i**: observed price of house *i*.  
-- **α (alpha)**: intercept → baseline value of a hypothetical “zero-feature” house (not realistic, but anchors the regression).  
-- **β_j (betas)**: coefficients → marginal contribution of each attribute *X_j* to price.  
+- **\alpha**: intercept → baseline value of a hypothetical “zero-feature” house (not realistic, but anchors the regression).  
+- **\beta_j**: coefficients → marginal contribution of each attribute *X_j* to price.  
 - **X_{ij}**: attribute *j* of house *i* (e.g., square footage, bedrooms, neighborhood quality).  
-- **ε_i**: error term → unobserved influences (noise, omitted features, buyer-seller negotiation).  
+- **\varepsilon_i**: error term → unobserved influences (noise, omitted features, buyer-seller negotiation).  
 
-**Example:** If β₁ (for square footage) = 250, then each extra square foot adds about $250 to the house price, holding other factors constant.
+**Example:** If \( \beta_1 \) (for square footage) = 250, then each extra square foot adds about $250 to the house price, holding other factors constant.
 
 ### 4.3 Data Requirements
 - **Rich micro-level data** with many attributes.  
@@ -36,7 +36,7 @@ $$
 
 ### 4.5 Weaknesses of HPM
 - **Data-hungry:** requires detailed, consistent feature data.  
-- **Omitted variable bias:** missing attributes distort β estimates.  
+- **Omitted variable bias:** missing attributes distort \( \beta \) estimates.  
 - **Multicollinearity:** correlated features (e.g., size and bedrooms) make estimates unstable.  
 - **Market instability:** preferences change over time, requiring re-estimation.
 
@@ -77,10 +77,10 @@ $$
 \ln(P_{i,t_2}) - \ln(P_{i,t_1}) = \sum_{j} eta_j D_{j} + arepsilon_i
 $$
 
-- **ln(P_{i,t₂}) - ln(P_{i,t₁})**: log price change of house *i* between sale at *t₁* and resale at *t₂*.  
+- **\ln(P_{i,t_2}) - \ln(P_{i,t_1})**: log price change of house *i* between sale at *t₁* and resale at *t₂*.  
 - **D_j**: dummy variables for time periods.  
-- **β_j**: estimated average appreciation/depreciation in each period.  
-- **ε_i**: error term (house-specific shocks).  
+- **\beta_j**: estimated average appreciation/depreciation in each period.  
+- **\varepsilon_i**: error term (house-specific shocks).  
 
 This structure produces a **house price index** across time.
 
@@ -129,9 +129,9 @@ $$
 - *i* = property  
 - *t* = time  
 - X_it = observed attributes  
-- μ_i = property-specific fixed effect  
-- λ_t = time fixed effect  
-- ε_it = error term  
+- \mu_i = property-specific fixed effect  
+- \lambda_t = time fixed effect  
+- \varepsilon_{it} = error term  
 
 ### 6.3 Vector Autoregression (VAR)
 - Treats multiple time series (e.g., prices, rents, interest rates, income) as endogenous.  
