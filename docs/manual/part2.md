@@ -11,9 +11,13 @@ Formally, the price is modeled as a function of characteristics, allowing us to 
 ### 4.2 Interpretation of Model Components (α, β, ε)
 The general HPM equation:  
 
+### 4.2 Interpretation of Model Components (α, β, ε)
+The general HPM equation:  
+
 $$
-P_i = lpha + eta_1 X_{i1} + eta_2 X_{i2} + \dots + eta_k X_{ik} + arepsilon_i
+P_i = \alpha + \beta_1 X_{i1} + \beta_2 X_{i2} + \dots + \beta_k X_{ik} + \varepsilon_i
 $$
+
 
 - **P_i**: observed price of house *i*.  
 - **\alpha**: intercept → baseline value of a hypothetical “zero-feature” house (not realistic, but anchors the regression).  
@@ -74,7 +78,7 @@ By differencing prices of identical homes across transactions, RSM removes the n
 ### 5.2 Mathematical Formulation
 
 $$
-\ln(P_{i,t_2}) - \ln(P_{i,t_1}) = \sum_{j} eta_j D_{j} + arepsilon_i
+\ln(P_{i,t_2}) - \ln(P_{i,t_1}) = \sum_{j} \beta_j D_{j} + \varepsilon_i
 $$
 
 - **\ln(P_{i,t_2}) - \ln(P_{i,t_1})**: log price change of house *i* between sale at *t₁* and resale at *t₂*.  
@@ -123,7 +127,7 @@ HPM and RSM capture partial aspects of housing markets. Hybrid econometric model
 General form:
 
 $$
-Price_{it} = lpha + eta X_{it} + \mu_i + \lambda_t + arepsilon_{it}
+Price_{it} = \alpha + \beta X_{it} + \mu_i + \lambda_t + \varepsilon_{it}
 $$
 
 - *i* = property  
@@ -140,15 +144,15 @@ $$
 Example:
 
 $$
-HP_t = a_1 + b_{11}HP_{t-1} + b_{12}IR_{t-1} + b_{13}Y_{t-1} + arepsilon_{1t}
+HP_t = a_1 + b_{11}HP_{t-1} + b_{12}IR_{t-1} + b_{13}Y_{t-1} + \varepsilon_{1t}
 $$
 
 $$
-IR_t = a_2 + b_{21}HP_{t-1} + b_{22}IR_{t-1} + b_{23}Y_{t-1} + arepsilon_{2t}
+IR_t = a_2 + b_{21}HP_{t-1} + b_{22}IR_{t-1} + b_{23}Y_{t-1} + \varepsilon_{2t}
 $$
 
 $$
-Y_t = a_3 + b_{31}HP_{t-1} + b_{32}IR_{t-1} + b_{33}Y_{t-1} + arepsilon_{3t}
+Y_t = a_3 + b_{31}HP_{t-1} + b_{32}IR_{t-1} + b_{33}Y_{t-1} + \varepsilon_{3t}
 $$
 
 ### 6.4 Error-Correction Models (ECM)
@@ -158,7 +162,7 @@ $$
 Example:
 
 $$
-\Delta Price_t = lpha (Price^* - Price_{t-1}) + eta \Delta X_t + arepsilon_t
+\Delta Price_t = \alpha (Price^* - Price_{t-1}) + \beta \Delta X_t + \varepsilon_t
 $$
 
 ### 6.5 Comparison of Hybrid Models
