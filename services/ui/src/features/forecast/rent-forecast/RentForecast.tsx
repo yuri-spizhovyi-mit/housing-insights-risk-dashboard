@@ -1,8 +1,10 @@
 import Frame from "../../../ui/Frame";
 import RentForecastHeader from "./RentForecastHeader";
-import { useFilters } from "../../../context/FilterContext";
 import Message from "../../../ui/Message";
 import RentForecastChart from "./RentForecastChart";
+import Skeleton from "@mui/material/Skeleton";
+
+import { useFilters } from "../../../context/FilterContext";
 import { useForecast } from "../useForecast";
 
 function RentForecast() {
@@ -11,17 +13,32 @@ function RentForecast() {
 
   return (
     <Frame className="col-span-12 lg:col-span-8">
-      <RentForecastHeader />
+      {isFetching ? (
+        <Skeleton
+          variant="rounded"
+          width="100%"
+          height={30}
+          animation="wave"
+          className="mb-9"
+        />
+      ) : (
+        <RentForecastHeader />
+      )}
 
       <div className="h-64">
-        {error ? (
+        {isFetching ? (
+          <Skeleton
+            variant="rounded"
+            width="100%"
+            height="100%"
+            animation="wave"
+          />
+        ) : error ? (
           <Message
             type={error.type}
             message={error.message}
             details={error.details}
           />
-        ) : isFetching ? (
-          <p className="text-gray-400">Fetching forecast…</p>
         ) : (
           <RentForecastChart data={forecast?.data} />
         )}

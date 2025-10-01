@@ -1,3 +1,4 @@
+import Skeleton from "@mui/material/Skeleton";
 import { useFilters } from "../../context/FilterContext";
 import Frame from "../../ui/Frame";
 import Message from "../../ui/Message";
@@ -11,24 +12,67 @@ function SentimentAndNews() {
 
   return (
     <Frame className="col-span-12 lg:col-span-4 text-amber-50">
-      {error ? (
-        <Message
-          type={error.type}
-          message={error.message}
-          details={error.details}
+      {isFetching ? (
+        <Skeleton
+          variant="rounded"
+          width="60%"
+          height={28}
+          animation="wave"
+          className="mb-6"
         />
       ) : (
-        <>
-          <SentimentAndNewsHeader />
-          <ul className="space-y-3">
-            {isFetching ? (
-              <p>Pending..</p>
-            ) : (
-              sentiments?.items.map((item, i) => <NewsItem key={i} {...item} />)
-            )}
-          </ul>
-        </>
+        <SentimentAndNewsHeader />
       )}
+
+      <div className="h-64">
+        {error ? (
+          <Message
+            type={error.type}
+            message={error.message}
+            details={error.details}
+          />
+        ) : (
+          <>
+            {isFetching ? (
+              <ul className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <li
+                    key={i}
+                    className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/40"
+                  >
+                    <Skeleton
+                      variant="text"
+                      width="80%"
+                      height={15}
+                      animation="wave"
+                    />
+                    <div className="flex gap-3 mt-3">
+                      <Skeleton
+                        variant="rounded"
+                        width={50}
+                        height={15}
+                        animation="wave"
+                      />
+                      <Skeleton
+                        variant="text"
+                        width={80}
+                        height={15}
+                        animation="wave"
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="space-y-3">
+                {sentiments?.items.map((item, i) => (
+                  <NewsItem key={i} {...item} />
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
     </Frame>
   );
 }

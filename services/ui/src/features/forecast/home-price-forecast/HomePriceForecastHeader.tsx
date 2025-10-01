@@ -2,7 +2,7 @@ import { Home } from "lucide-react";
 
 function HomePriceForecastHeader() {
   return (
-    <div className="flex items-center justify-between mb-9">
+    <div className="flex items-center justify-between mb-9 flex-wrap gap-2">
       <h2 className="font-semibold flex items-center gap-2">
         <Home className="size-5 opacity-80" /> Home Price Forecast
       </h2>
