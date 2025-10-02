@@ -9,3 +9,5 @@ beautifulsoup4   # for Rentals.ca scraper
 lxml             # helps pandas/bs4 parse HTML tables
 pytest
 vaderSentiment>=3.3.2
+matplotlib
+reportlab
