@@ -3,6 +3,7 @@ from ..utils.db_writer import write_forecasts
 from .prophet_model import run_prophet
 from .arima_model import run_arima
 
+
 def run_forecasting_pipeline(conn, city: str, target: str):
     """
     Run all forecasting models for a given city + target

@@ -2,6 +2,7 @@ from ..utils.data_loader import load_timeseries
 from ..utils.db_writer import write_anomalies
 from .isolation_forest import detect_iforest
 
+
 def run_anomaly_pipeline(conn, city: str, target: str):
     """
     Run anomaly detection for a given city + target

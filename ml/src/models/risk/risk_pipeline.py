@@ -3,6 +3,7 @@ from ..utils.db_writer import write_risks
 from .affordability import calc_affordability
 from .composite_index import calc_composite
 
+
 def run_risk_pipeline(conn, city: str, target: str):
     """
     Calculate risk indices for a given city + target

@@ -6,6 +6,7 @@ from services.fapi.models.model_predictions import ModelPrediction
 from services.fapi.models.risk_predictions import RiskPrediction
 from services.fapi.models.anomaly_signals import AnomalySignal
 
+
 def generate_city_report(db: Session, city: str) -> BytesIO:
     """
     Generate a PDF snapshot for a city with:
@@ -30,7 +31,11 @@ def generate_city_report(db: Session, city: str) -> BytesIO:
     )
     if forecast:
         c.setFont("Helvetica", 12)
-        c.drawString(50, 710, f"Latest Price Forecast: {forecast.yhat:,.0f} ({forecast.predict_date})")
+        c.drawString(
+            50,
+            710,
+            f"Latest Price Forecast: {forecast.yhat:,.0f} ({forecast.predict_date})",
+        )
 
     # Risk section
     risks = (
@@ -62,7 +67,11 @@ def generate_city_report(db: Session, city: str) -> BytesIO:
         y -= 30
         for a in anomalies:
             c.setFont("Helvetica", 12)
-            c.drawString(70, y, f"{a.detect_date}: {a.target} spike (score={a.anomaly_score:.2f})")
+            c.drawString(
+                70,
+                y,
+                f"{a.detect_date}: {a.target} spike (score={a.anomaly_score:.2f})",
+            )
             y -= 20
 
     # Footer
