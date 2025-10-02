@@ -181,3 +181,33 @@ CREATE TABLE IF NOT EXISTS public.construction_permits (
 -- Index on postal_code to support joins with `listings_raw`
 CREATE INDEX IF NOT EXISTS idx_construction_permits_postal_code
 ON public.construction_permits (postal_code);
+
+-- V3__risk_predictions.sql
+CREATE TABLE IF NOT EXISTS public.risk_predictions (
+  run_id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  city TEXT NOT NULL,
+  risk_type TEXT NOT NULL,         -- affordability, volatility, price_to_rent, etc.
+  predict_date DATE NOT NULL,
+  risk_value NUMERIC(14,4) NOT NULL,
+  model_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+--V4__anomaly_signals.sql
+-- Optional index for fast dashboard queries
+CREATE INDEX IF NOT EXISTS idx_risk_predictions_city_date
+  ON public.risk_predictions(city, predict_date);
+
+CREATE TABLE IF NOT EXISTS public.anomaly_signals (
+  run_id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  city TEXT NOT NULL,
+  target TEXT NOT NULL,            -- "price" or "rent"
+  detect_date DATE NOT NULL,
+  anomaly_score NUMERIC(14,4),
+  is_anomaly BOOLEAN DEFAULT false,
+  model_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_anomaly_signals_city_target_date
+  ON public.anomaly_signals(city, target, detect_date);
