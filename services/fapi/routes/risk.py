@@ -5,6 +5,7 @@ from services.fapi.models.risk_predictions import RiskPrediction
 
 router = APIRouter(prefix="/risk", tags=["risk"])
 
+
 @router.get("")
 def get_risk(city: str, db: Session = Depends(get_db)):
     rows = (
@@ -19,8 +20,5 @@ def get_risk(city: str, db: Session = Depends(get_db)):
     return {
         "city": city,
         "latest_date": rows[0].predict_date.isoformat(),
-        "indices": [
-            {"type": r.risk_type, "value": float(r.risk_value)}
-            for r in rows
-        ]
+        "indices": [{"type": r.risk_type, "value": float(r.risk_value)} for r in rows],
     }
