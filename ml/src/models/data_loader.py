@@ -1,6 +1,7 @@
 import pandas as pd
 import psycopg2
 
+
 def load_timeseries(conn, target: str, city: str) -> pd.DataFrame:
     """
     Load a time series (e.g., rent_index, house_price_index) for a given city.
