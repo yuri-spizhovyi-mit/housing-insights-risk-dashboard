@@ -3,8 +3,10 @@ import pandas as pd
 # Forecasting libs
 from prophet import Prophet
 from statsmodels.tsa.arima.model import ARIMA
+
 # Risk & anomaly detection
 from sklearn.ensemble import IsolationForest
+
 
 # -----------------------------
 # Forecast Models
@@ -20,18 +22,20 @@ def run_forecasts(df: pd.DataFrame, city: str, target: str):
     forecast = m.predict(future)
 
     for step, row in forecast.tail(12).iterrows():
-        results.append({
-            "model_name": "prophet",
-            "target": target,
-            "horizon_months": step + 1,
-            "city": city,
-            "predict_date": row["ds"].date(),
-            "yhat": float(row["yhat"]),
-            "yhat_lower": float(row["yhat_lower"]),
-            "yhat_upper": float(row["yhat_upper"]),
-            "features_version": "v1.0",
-            "model_artifact_uri": "s3://models/prophet_v1.pkl"
-        })
+        results.append(
+            {
+                "model_name": "prophet",
+                "target": target,
+                "horizon_months": step + 1,
+                "city": city,
+                "predict_date": row["ds"].date(),
+                "yhat": float(row["yhat"]),
+                "yhat_lower": float(row["yhat_lower"]),
+                "yhat_upper": float(row["yhat_upper"]),
+                "features_version": "v1.0",
+                "model_artifact_uri": "s3://models/prophet_v1.pkl",
+            }
+        )
 
     # TODO: Add ARIMA, LightGBM models here as needed
 
@@ -56,10 +60,34 @@ def calc_risk_indices(df: pd.DataFrame, city: str, target: str):
     composite = (affordability + price_to_rent + (1 - inventory)) / 3
 
     return [
-        {"city": city, "risk_type": "affordability", "predict_date": df["date"].iloc[-1], "risk_value": affordability, "model_name": "calc"},
-        {"city": city, "risk_type": "price_to_rent", "predict_date": df["date"].iloc[-1], "risk_value": price_to_rent, "model_name": "calc"},
-        {"city": city, "risk_type": "inventory", "predict_date": df["date"].iloc[-1], "risk_value": inventory, "model_name": "calc"},
-        {"city": city, "risk_type": "composite_index", "predict_date": df["date"].iloc[-1], "risk_value": composite, "model_name": "calc"},
+        {
+            "city": city,
+            "risk_type": "affordability",
+            "predict_date": df["date"].iloc[-1],
+            "risk_value": affordability,
+            "model_name": "calc",
+        },
+        {
+            "city": city,
+            "risk_type": "price_to_rent",
+            "predict_date": df["date"].iloc[-1],
+            "risk_value": price_to_rent,
+            "model_name": "calc",
+        },
+        {
+            "city": city,
+            "risk_type": "inventory",
+            "predict_date": df["date"].iloc[-1],
+            "risk_value": inventory,
+            "model_name": "calc",
+        },
+        {
+            "city": city,
+            "risk_type": "composite_index",
+            "predict_date": df["date"].iloc[-1],
+            "risk_value": composite,
+            "model_name": "calc",
+        },
     ]
 
 
@@ -76,12 +104,14 @@ def detect_anomalies(df: pd.DataFrame, city: str, target: str):
 
     results = []
     for _, row in df.iterrows():
-        results.append({
-            "city": city,
-            "target": target,
-            "detect_date": row["date"],
-            "anomaly_score": float(row["value"]),
-            "is_anomaly": row["score"] == -1,
-            "model_name": "isolation_forest"
-        })
+        results.append(
+            {
+                "city": city,
+                "target": target,
+                "detect_date": row["date"],
+                "anomaly_score": float(row["value"]),
+                "is_anomaly": row["score"] == -1,
+                "model_name": "isolation_forest",
+            }
+        )
     return results
