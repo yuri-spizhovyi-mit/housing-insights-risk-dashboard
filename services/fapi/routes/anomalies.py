@@ -5,6 +5,7 @@ from services.fapi.models.anomaly_signals import AnomalySignal
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
+
 @router.get("")
 def get_anomalies(city: str, target: str, db: Session = Depends(get_db)):
     rows = (
@@ -26,5 +27,5 @@ def get_anomalies(city: str, target: str, db: Session = Depends(get_db)):
                 "is_anomaly": r.is_anomaly,
             }
             for r in rows
-        ]
+        ],
     }
