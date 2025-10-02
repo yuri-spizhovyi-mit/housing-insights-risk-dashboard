@@ -3,8 +3,11 @@ from data_loader import load_timeseries
 from run_models import run_forecasts, calc_risk_indices, detect_anomalies
 from db_writer import write_forecasts, write_risks, write_anomalies
 
+
 def run_pipeline():
-    conn = psycopg2.connect("dbname=hird user=postgres password=postgres host=localhost port=5433")
+    conn = psycopg2.connect(
+        "dbname=hird user=postgres password=postgres host=localhost port=5433"
+    )
 
     cities = ["Kelowna", "Toronto", "Vancouver"]
     metrics = ["rent_index", "house_price_index"]
@@ -26,6 +29,7 @@ def run_pipeline():
             write_anomalies(conn, anomaly_res)
 
     conn.close()
+
 
 if __name__ == "__main__":
     run_pipeline()

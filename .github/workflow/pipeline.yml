@@ -1,0 +1,19 @@
+name: Modeling Pipelines
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # forecast daily
+    - cron: "0 3 * * 1"   # risk weekly
+    - cron: "0 */6 * * *" # anomalies every 6h
+
+jobs:
+  run-pipelines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - run: pip install -r ml/requirements.txt
+      - run: python -m ml.src.models.pipeline

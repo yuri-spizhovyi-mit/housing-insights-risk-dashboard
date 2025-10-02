@@ -214,3 +214,24 @@ clean:
 	rm -rf $(VENV)
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
+.PHONY: forecast risk anomalies all
+
+forecast:
+	@echo "Running forecasting pipeline..."
+	python -m ml.src.models.forecasting.forecast_pipeline
+
+risk:
+	@echo "Running risk pipeline..."
+	python -m ml.src.models.risk.risk_pipeline
+
+anomalies:
+	@echo "Running anomaly pipeline..."
+	python -m ml.src.models.anomalies.anomaly_pipeline
+
+all:
+	@echo "Running full modeling pipeline..."
+	python -m ml.src.models.pipeline
+##make forecast
+# make risk
+# make anomalies
+# make all
