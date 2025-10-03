@@ -11,3 +11,8 @@ pytest
 vaderSentiment>=3.3.2
 matplotlib
 reportlab
+statsmodels
+numpy
+prophet
+scikit-learn
+prophet

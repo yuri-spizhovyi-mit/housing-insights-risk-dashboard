@@ -46,6 +46,7 @@ https://housing-insights-risk-dashboard.vercel.app/
 |    GET | `/risk`              | Risk indicators for a city              |
 |    GET | `/sentiment`         | News sentiment & headlines              |
 |    GET | `/report/{city}.pdf` | Download PDF report for a city          |
+|    GET | `/anomalies`         | Market anomalies detection for a city   |
 
 ---
 
@@ -105,6 +106,16 @@ https://housing-insights-risk-dashboard.vercel.app/
 }
 ```
 
+#### /anomalies
+
+```json
+{
+  "city": "Toronto",
+  "anomalies": [
+    { "date": "2025-08-01", "metric": "price", "value": 850000, "expected": 780000, "deviation": "+9%" }
+  ]
+}
+```
 #### /report/{city}.pdf
 
 - Returns binary PDF

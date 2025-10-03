@@ -12,7 +12,7 @@ def run_prophet(df: pd.DataFrame, city: str, target: str):
     m = Prophet()
     m.fit(prophet_df)
 
-    future = m.make_future_dataframe(periods=12, freq="M")
+    future = m.make_future_dataframe(periods=12, freq="ME")
     forecast = m.predict(future)
 
     for i, row in forecast.tail(12).iterrows():

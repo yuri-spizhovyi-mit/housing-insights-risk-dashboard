@@ -1,5 +1,5 @@
-from ..utils.data_loader import load_timeseries
-from ..utils.db_writer import write_forecasts
+from ml.src.utils.data_loader import load_timeseries
+from ml.src.utils.db_writer import write_forecasts
 from .prophet_model import run_prophet
 from .arima_model import run_arima
 
