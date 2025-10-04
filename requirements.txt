@@ -16,3 +16,4 @@ numpy
 prophet
 scikit-learn
 prophet
+feed
