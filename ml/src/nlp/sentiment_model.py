@@ -2,6 +2,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 analyzer = SentimentIntensityAnalyzer()
 
+
 def score_text(text: str):
     if not text:
         return 0.0, "NEU"
