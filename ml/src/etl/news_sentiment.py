@@ -6,7 +6,7 @@ Now delegates sentiment scoring to ml/src/models/nlp/sentiment_model.py
 import os
 import pandas as pd
 import feedparser
-from ml.src.models.nlp.sentiment_model import score_text   # ✅ new import
+from ml.src.models.nlp.sentiment_model import score_text  # ✅ new import
 from . import base
 from datetime import datetime
 from sqlalchemy import text
@@ -29,6 +29,7 @@ FEEDS = {
     ],
 }
 
+
 def fetch_news() -> pd.DataFrame:
     """Fetch RSS feeds and apply sentiment model."""
     records = []
@@ -36,18 +37,22 @@ def fetch_news() -> pd.DataFrame:
         for url in urls:
             feed = feedparser.parse(url)
             for e in feed.entries:
-                score, label = score_text(e.title)   # ✅ model call
-                date_val = pd.to_datetime(getattr(e, "published", None), errors="coerce")
+                score, label = score_text(e.title)  # ✅ model call
+                date_val = pd.to_datetime(
+                    getattr(e, "published", None), errors="coerce"
+                )
                 if pd.isna(date_val):
                     date_val = pd.Timestamp.today()
-                records.append({
-                    "date": date_val.date(),
-                    "city": city,
-                    "title": e.title,
-                    "url": e.link,
-                    "sentiment_score": score,
-                    "sentiment_label": label,
-                })
+                records.append(
+                    {
+                        "date": date_val.date(),
+                        "city": city,
+                        "title": e.title,
+                        "url": e.link,
+                        "sentiment_score": score,
+                        "sentiment_label": label,
+                    }
+                )
     return pd.DataFrame(records)
 
 
@@ -56,7 +61,9 @@ def update_news_sentiment(ctx_or_engine):
     engine = getattr(ctx_or_engine, "engine", ctx_or_engine)
     with engine.begin() as conn:
         df = pd.read_sql(
-            text("SELECT date, city, sentiment_score FROM news_articles WHERE date IS NOT NULL"),
+            text(
+                "SELECT date, city, sentiment_score FROM news_articles WHERE date IS NOT NULL"
+            ),
             conn,
         )
 
@@ -106,7 +113,9 @@ def run(ctx):
     for engine in [ctx.engine, neon_engine]:
         with engine.begin() as conn:
             conn.execute(
-                text("DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';")
+                text(
+                    "DELETE FROM news_articles WHERE date < CURRENT_DATE - INTERVAL '90 days';"
+                )
             )
 
     update_news_sentiment(ctx)
