@@ -12,7 +12,7 @@ from ml.src.models.risk.composite_index import calc_composite
 
 
 def sample_df():
-    dates = pd.date_range("2020-01-01", periods=12, freq="M")
+    dates = pd.date_range("2020-01-01", periods=12, freq="ME")
     values = [500000 + i * 10000 for i in range(12)]
     return pd.DataFrame({"date": dates, "value": values})
 

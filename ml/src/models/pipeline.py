@@ -1,7 +1,7 @@
 import psycopg2
-from forecasting.forecast_pipeline import run_forecasting_pipeline
-from risk.risk_pipeline import run_risk_pipeline
-from anomalies.anomaly_pipeline import run_anomaly_pipeline
+from ml.src.utils.data_loader import load_timeseries
+from ml.src.models.run_models import run_forecasts, calc_risk_indices, detect_anomalies
+from ml.src.utils.db_writer import write_forecasts, write_risks, write_anomalies
 
 
 def run_pipeline():
@@ -14,14 +14,19 @@ def run_pipeline():
 
     for city in cities:
         for metric in metrics:
-            # Forecasts
-            run_forecasting_pipeline(conn, city, metric)
+            df = load_timeseries(conn, metric, city)
 
-            # Risk
-            run_risk_pipeline(conn, city, metric)
+            # Forecast models
+            forecast_res = run_forecasts(df, city, metric)
+            write_forecasts(conn, forecast_res)
 
-            # Anomalies
-            run_anomaly_pipeline(conn, city, metric)
+            # Risk indices
+            risk_res = calc_risk_indices(df, city, metric)
+            write_risks(conn, risk_res)
+
+            # Anomaly detection
+            anomaly_res = detect_anomalies(df, city, metric)
+            write_anomalies(conn, anomaly_res)
 
     conn.close()
 
