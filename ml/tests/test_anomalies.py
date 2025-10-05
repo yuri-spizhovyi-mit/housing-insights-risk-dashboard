@@ -11,7 +11,7 @@ from ml.src.models.anomalies.isolation_forest import detect_iforest
 
 
 def sample_df():
-    dates = pd.date_range("2020-01-01", periods=24, freq="M")
+    dates = pd.date_range("2020-01-01", periods=24, freq="ME")
     values = [100] * 20 + [500, 600, 700, 800]  # spike anomalies
     return pd.DataFrame({"date": dates, "value": values})
 

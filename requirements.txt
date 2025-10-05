@@ -16,4 +16,4 @@ numpy
 prophet
 scikit-learn
 prophet
-feed
+feedparser==6.0.11
