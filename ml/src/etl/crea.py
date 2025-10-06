@@ -10,7 +10,7 @@ import re
 import zipfile
 import pandas as pd
 import requests
-
+from pathlib import Path
 
 HPI_TOOL_URL = "https://www.crea.ca/housing-market-stats/mls-home-price-index/hpi-tool/"
 
@@ -229,21 +229,77 @@ def _tidy(df: pd.DataFrame) -> pd.DataFrame:
 # --------------------------------------------------------------------------------------
 
 
-def run(ctx: Context):
-    # 1) discover & download latest CREA ZIP
-    url = _latest_zip_url()
-    resp = requests.get(url, timeout=180)
-    resp.raise_for_status()
+def run(ctx):
+    print("[DEBUG] CREA ETL starting...")
 
-    # 2) snapshot raw ZIP to MinIO
-    key = (
-        f"{ctx.s3_raw_prefix}/crea/{ctx.run_date.isoformat()}/{url.rsplit('/', 1)[-1]}"
-    )
-    put_raw_bytes(ctx, key, resp.content, "application/zip")
+    # Local ZIP fallback
+    local_zip = Path(__file__).resolve().parents[3] / "data" / "MLS_HPI_September_2025_EN.zip"
+    if local_zip.exists():
+        print(f"[DEBUG] Using local CREA ZIP → {local_zip}")
+        with open(local_zip, "rb") as f:
+            resp_content = f.read()
+    else:
+        # fallback to web scraping if no local file found
+        url = _latest_zip_url()
+        resp = requests.get(url, timeout=180)
+        resp.raise_for_status()
+        resp_content = resp.content
 
-    # 3) parse + tidy (with fallback to Canada)
-    raw_df = _read_any_table_from_zip(resp.content)
-    tidy = _tidy(raw_df)
+    # Snapshot raw ZIP
+    key = f"{ctx.s3_raw_prefix}/crea/{ctx.run_date.isoformat()}/MLS_HPI_September_2025_EN.zip"
+    put_raw_bytes(ctx, key, resp_content, "application/zip")
+    print("[DEBUG] Raw CREA ZIP snapshot saved to MinIO")
 
-    # 4) write to Postgres (even if empty, so tests capture the intent)
+    # Extract and load the Seasonally Adjusted Monthly workbook
+    with zipfile.ZipFile(io.BytesIO(resp_content)) as zf:
+        xlsx_name = [n for n in zf.namelist() if "Seasonally Adjusted (M)" in n][0]
+        print(f"[DEBUG] Found Excel file → {xlsx_name}")
+        with zf.open(xlsx_name) as f:
+            df = pd.read_excel(f)
+
+    print("[DEBUG] Raw HPI sheet shape:", df.shape)
+    print("[DEBUG] Columns:", list(df.columns)[:10])
+
+    # --- normalize into long form ---
+    # Expect columns: 'Date', 'Region', 'Benchmark Price', 'Composite', etc.
+    df.columns = [c.strip() for c in df.columns]
+    if "Region" in df.columns:
+        df = df.rename(columns={"Region": "city", "Date": "date"})
+    elif "City" in df.columns:
+        df = df.rename(columns={"City": "city", "Date": "date"})
+    else:
+        # fallback for national-only dataset
+        print("[DEBUG] No 'Region' column found — treating as Canada-wide series.")
+        df["city"] = "Canada"
+        df = df.rename(columns={"Date": "date"})
+
+##############################
+
+
+    # Convert to long format (one row per city/date/measure)
+    value_cols = [c for c in df.columns if c not in ["date", "city"]]
+    tidy = df.melt(id_vars=["city", "date"], value_vars=value_cols,
+                   var_name="measure", value_name="index_value")
+
+    # clean
+    tidy["date"] = pd.to_datetime(tidy["date"], errors="coerce")
+    tidy = tidy.dropna(subset=["date", "index_value"])
+    tidy["source"] = "CREA_HPI"
+
+    print("[DEBUG] Tidy shape:", tidy.shape)
+    print(tidy.head(5))
+
+    # Write to DB
     write_hpi_upsert(tidy, ctx)
+    print("[DEBUG] CREA ETL complete — rows written:", len(tidy))
+
+    return tidy
+
+
+if __name__ == "__main__":
+    from datetime import date
+    from ml.src.etl import base  # ✅ add this import
+
+    ctx = base.Context(run_date=date.today())
+    run(ctx)
+    print("[DEBUG] CREA ETL finished.")

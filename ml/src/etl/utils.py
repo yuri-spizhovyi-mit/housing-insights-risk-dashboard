@@ -48,8 +48,10 @@ def _clean(s: str) -> str:
     # drop common suffixes like " (CMA)" / " census metropolitan area"
     s = re.sub(rf"\s*\(({_SUFFIXES})\)$", "", s)
     s = re.sub(rf"\s*({_SUFFIXES})$", "", s)
-    # drop province tail after comma
+    # drop province tail after comma (full names)
     s = re.sub(rf",\s*({_PROVINCES})\b", "", s)
+    # NEW: drop short province abbreviations (BC, Ont, Alb, etc.)
+    s = re.sub(r",\s*\b(bc|ont|ab|mb|qc|ns|nb|nl|pe|yt|nt|nu|c\-b)\b\.?", "", s)
     return s.strip()
 
 

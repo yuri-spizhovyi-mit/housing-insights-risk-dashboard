@@ -6,6 +6,11 @@ from ml.src.etl.base import Context, month_floor, put_raw_bytes
 from ml.src.etl.statcan_wds import download_table_csv
 from ml.src.etl import base
 from ml.src.etl.utils import canonical_geo
+import sys
+
+# --- DEBUG LOGGING TO FILE ---
+sys.stdout = open("statcan_debug.log", "w", encoding="utf-8")
+sys.stderr = sys.stdout
 
 # Default table to load when calling run(ctx)
 # CPI, all-items, monthly: 18-10-0004-01 -> 1810000401
@@ -160,33 +165,64 @@ def run(ctx: Context):
     pid = DEFAULT_PID
     metric = DEFAULT_METRIC
 
-    # Download full table and snapshot RAW
+    # ────── Major step 1 ──────
+    print("[DEBUG] Step 1: Starting StatCan ETL for PID =", pid)
+
+    # Download full table
     df_raw = download_table_csv(pid)
+    print("[DEBUG] Step 2: Raw DataFrame downloaded — shape:", df_raw.shape)
+    print("[DEBUG] Step 2: Raw columns:", list(df_raw.columns))
+
+    # Save raw snapshot
     put_raw_bytes(
         ctx,
         f"{ctx.s3_raw_prefix}/statcan/{ctx.run_date.isoformat()}/{_normalize_pid_like(pid)}.csv",
         df_raw.to_csv(index=False).encode("utf-8"),
         "text/csv",
     )
+    print("[DEBUG] Step 3: Raw CSV snapshot written to MinIO")
 
-    # Optional: for CPI tables keep only "All-items"
+    # ────── Major step 4 ──────
+    print("[DEBUG] Step 4: Filtering 'All-items' rows (if available)")
     prod_cols = [c for c in df_raw.columns if "product" in str(c).lower()]
     df = df_raw.copy()
     for pc in prod_cols:
         df = df[df[pc].astype(str).str.contains("All-items", case=False, na=False)]
+    print("[DEBUG] Step 4: Filtered DataFrame shape:", df.shape)
 
-    # Normalize & keep target CMAs + Canada
+    # ────── Major step 5 ──────
+    print("[DEBUG] Step 5: Normalizing data to metrics format")
     tidy = _normalize_common(df, metric_name=metric)
+    print("[DEBUG] Step 5: Tidy shape:", tidy.shape)
+    if not tidy.empty:
+        print("[DEBUG] Step 5: Sample tidy rows:")
+        print(tidy.head(10))
+    else:
+        print("[DEBUG] Step 5: WARNING — tidy DataFrame is empty")
 
-    # Write via generic writer so your existing tests (that monkeypatch write_df) still work
-    base.write_df(tidy, "metrics", ctx)
+    # ────── Major step 6 ──────
+    print("[DEBUG] Step 6: Writing tidy DataFrame to database → 'metrics'")
+    base.write_metrics_upsert(tidy, ctx)
+    print("[DEBUG] Step 6: Write complete")
 
-    # Snapshot TIDY for auditability
+    # ────── Major step 7 ──────
+    print("[DEBUG] Step 7: Snapshot tidy CSV to MinIO")
     put_raw_bytes(
         ctx,
         f"{ctx.s3_raw_prefix}/statcan/{ctx.run_date.isoformat()}/{_normalize_pid_like(pid)}.tidy.csv",
         tidy.to_csv(index=False).encode("utf-8"),
         "text/csv",
     )
+    print("[DEBUG] Step 7: Tidy CSV snapshot written successfully")
 
+    print("[DEBUG] Step 8: ETL complete — rows written:", len(tidy))
     return tidy
+
+
+if __name__ == "__main__":
+    from datetime import date
+    from ml.src.etl import base
+
+    ctx = base.Context(run_date=date.today())
+    tidy = run(ctx)
+    print(f"[DEBUG] StatCan run() completed — returned {len(tidy)} rows.")

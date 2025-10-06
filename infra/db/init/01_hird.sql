@@ -94,15 +94,14 @@ ON public.model_predictions (city, target, horizon_months, predict_date);
 -- These tables have composite primary keys (date, city/province).
 -- -----------------------------------------------------------------------------
 
+-- CREA HPI table (MLS® Home Price Index)
 CREATE TABLE IF NOT EXISTS public.house_price_index (
-    date                    DATE,
-    city                    VARCHAR(100),
-    index_value             DECIMAL(10, 2),
-    median_price_house      DECIMAL(12, 2),
-    median_price_condo      DECIMAL(12, 2),
-    active_listings_count   INTEGER,
-    avg_listing_days        INTEGER,
-    PRIMARY KEY (date, city)
+    city          VARCHAR(100)    NOT NULL,
+    "date"        DATE            NOT NULL,
+    index_value   DOUBLE PRECISION,
+    measure       VARCHAR(100)    NOT NULL,
+    source        VARCHAR(50)     NOT NULL,
+    CONSTRAINT house_price_index_pkey PRIMARY KEY (city, "date", measure)
 );
 
 
@@ -211,3 +210,13 @@ CREATE TABLE IF NOT EXISTS public.anomaly_signals (
 
 CREATE INDEX IF NOT EXISTS idx_anomaly_signals_city_target_date
   ON public.anomaly_signals(city, target, detect_date);
+
+CREATE TABLE IF NOT EXISTS public.metrics (
+    id SERIAL PRIMARY KEY,
+    city TEXT NOT NULL,
+    date DATE NOT NULL,
+    metric TEXT NOT NULL,
+    value NUMERIC,
+    source TEXT DEFAULT 'unknown',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

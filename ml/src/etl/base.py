@@ -114,19 +114,16 @@ def put_raw_bytes(
 def write_df(
     df: pd.DataFrame, table: str, ctx: Context, if_exists: str = "append"
 ) -> int:
-    """
-    Generic loader: appends DataFrame rows into `public.{table}`.
-    Returns the total row count in the table after the write.
-    """
     if df is None or df.empty:
+        print(f"[DEBUG] Skipping write: {table} DataFrame empty.")
         return 0
 
-    # normalize column names (you already did this—kept for safety)
     df = df.copy()
     df.columns = [c.lower() for c in df.columns]
 
-    with ctx.engine.begin() as conn:
-        # write rows
+    engine = ctx.engine
+    # Use connection.execute() without implicit transaction rollback
+    with engine.connect() as conn:
         df.to_sql(
             table,
             conn,
@@ -135,10 +132,12 @@ def write_df(
             index=False,
             method="multi",
         )
-        # return current table size for quick verification
+        conn.commit()  # ✅ Explicit commit to persist data
+
         total = conn.execute(
             text(f'SELECT COUNT(*) FROM public."{table}"')
         ).scalar_one()
+        print(f"[DEBUG] Total rows in {table} after write:", total)
         return int(total)
 
 

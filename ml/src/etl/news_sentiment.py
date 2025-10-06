@@ -6,7 +6,7 @@ Now delegates sentiment scoring to ml/src/models/nlp/sentiment_model.py
 import os
 import pandas as pd
 import feedparser
-from ml.src.models.nlp.sentiment_model import score_text  # ✅ new import
+from ml.src.nlp.sentiment_model import score_text  # ✅ new import
 from . import base
 from datetime import datetime
 from sqlalchemy import text
