@@ -1,0 +1,28 @@
+[DEBUG] Step 1: Starting StatCan ETL for PID = 1810000401
+C:\Users\yspiz\Projects\housing-insights-risk-dashboard\ml\src\etl\statcan_wds.py:51: DtypeWarning: Columns (11,13) have mixed types. Specify dtype option on import or set low_memory=False.
+  return pd.read_csv(zf.open(name))
+[DEBUG] Step 2: Raw DataFrame downloaded — shape: (1128853, 15)
+[DEBUG] Step 2: Raw columns: ['REF_DATE', 'GEO', 'DGUID', 'Products and product groups', 'UOM', 'UOM_ID', 'SCALAR_FACTOR', 'SCALAR_ID', 'VECTOR', 'COORDINATE', 'VALUE', 'STATUS', 'SYMBOL', 'TERMINATED', 'DECIMALS']
+[DEBUG] Step 3: Raw CSV snapshot written to MinIO
+[DEBUG] Step 4: Filtering 'All-items' rows (if available)
+[DEBUG] Step 4: Filtered DataFrame shape: (90000, 15)
+[DEBUG] Step 5: Normalizing data to metrics format
+[DEBUG] Step 5: Tidy shape: (10390, 5)
+[DEBUG] Step 5: Sample tidy rows:
+      city       date                metric  value                source
+0   Canada 1914-01-01  StatCan_CPI_AllItems    6.0  StatCan_CPI_AllItems
+1   Canada 1914-01-01  StatCan_CPI_AllItems    7.2  StatCan_CPI_AllItems
+3   Canada 1914-02-01  StatCan_CPI_AllItems    6.0  StatCan_CPI_AllItems
+4   Canada 1914-02-01  StatCan_CPI_AllItems    7.2  StatCan_CPI_AllItems
+6   Canada 1914-03-01  StatCan_CPI_AllItems    6.0  StatCan_CPI_AllItems
+7   Canada 1914-03-01  StatCan_CPI_AllItems    7.2  StatCan_CPI_AllItems
+9   Canada 1914-04-01  StatCan_CPI_AllItems    6.0  StatCan_CPI_AllItems
+10  Canada 1914-04-01  StatCan_CPI_AllItems    7.1  StatCan_CPI_AllItems
+12  Canada 1914-05-01  StatCan_CPI_AllItems    5.9  StatCan_CPI_AllItems
+13  Canada 1914-05-01  StatCan_CPI_AllItems    7.0  StatCan_CPI_AllItems
+[DEBUG] Step 6: Writing tidy DataFrame to database → 'metrics'
+[DEBUG] Step 6: Write complete
+[DEBUG] Step 7: Snapshot tidy CSV to MinIO
+[DEBUG] Step 7: Tidy CSV snapshot written successfully
+[DEBUG] Step 8: ETL complete — rows written: 10390
+[DEBUG] StatCan run() completed — returned 10390 rows.

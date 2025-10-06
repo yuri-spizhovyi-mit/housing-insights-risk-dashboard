@@ -11,35 +11,50 @@ from sklearn.ensemble import IsolationForest
 # -----------------------------
 # Forecast Models
 # -----------------------------
-def run_forecasts(df: pd.DataFrame, city: str, target: str):
-    results = []
+def run_forecasts(df: pd.DataFrame, city: str, target: str) -> pd.DataFrame:
+    """
+    Fit Prophet model and return forecast DataFrame ready for DB insertion.
+    Expects df with columns ['ds', 'y'] (already renamed in data_loader).
+    Returns DataFrame with all required metadata for model_predictions.
+    """
+    if df is None or df.empty:
+        print(f"[WARN] Empty dataframe for {target} – {city}")
+        return pd.DataFrame()
 
-    # Prophet
-    prophet_df = df.rename(columns={"date": "ds", "value": "y"})
-    m = Prophet()
-    m.fit(prophet_df)
-    future = m.make_future_dataframe(periods=12, freq="M")
-    forecast = m.predict(future)
+    try:
+        m = Prophet(seasonality_mode="additive", yearly_seasonality=True)
+        m.fit(df)
 
-    for step, row in forecast.tail(12).iterrows():
-        results.append(
-            {
-                "model_name": "prophet",
-                "target": target,
-                "horizon_months": step + 1,
-                "city": city,
-                "predict_date": row["ds"].date(),
-                "yhat": float(row["yhat"]),
-                "yhat_lower": float(row["yhat_lower"]),
-                "yhat_upper": float(row["yhat_upper"]),
-                "features_version": "v1.0",
-                "model_artifact_uri": "s3://models/prophet_v1.pkl",
-            }
-        )
+        # Predict 12 future months
+        future = m.make_future_dataframe(periods=12, freq="MS")
+        forecast = m.predict(future)
 
-    # TODO: Add ARIMA, LightGBM models here as needed
+        # Keep only future horizon
+        future_forecast = forecast.tail(12)[["ds", "yhat", "yhat_lower", "yhat_upper"]].copy()
+        future_forecast = future_forecast.rename(columns={"ds": "predict_date"})
+        future_forecast["predict_date"] = pd.to_datetime(future_forecast["predict_date"])
 
-    return results
+        # Add metadata columns expected by model_predictions
+        future_forecast["model_name"] = "Prophet"
+        future_forecast["target"] = target
+        future_forecast["horizon_months"] = list(range(1, len(future_forecast) + 1))
+        future_forecast["city"] = city
+        future_forecast["property_type"] = None
+        future_forecast["beds"] = None
+        future_forecast["baths"] = None
+        future_forecast["sqft_min"] = None
+        future_forecast["sqft_max"] = None
+        future_forecast["year_built_min"] = None
+        future_forecast["year_built_max"] = None
+        future_forecast["features_version"] = "v1.0"
+        future_forecast["model_artifact_uri"] = "ml/models/prophet_v1.pkl"
+
+        print(f"[OK] Forecast generated for {target} – {city}: {len(future_forecast)} rows")
+        return future_forecast
+
+    except Exception as e:
+        print(f"[ERROR] run_forecasts() failed for {target} – {city}: {e}")
+        return pd.DataFrame()
 
 
 # -----------------------------

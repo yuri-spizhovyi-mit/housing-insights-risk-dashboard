@@ -59,3 +59,11 @@ def run(ctx: base.Context):
     tidy = _tidy(df).drop_duplicates(subset=["metric", "city", "date"])
     # Use generic writer so tests can monkeypatch and capture output
     base.write_df(tidy, "metrics", ctx)
+
+
+if __name__ == "__main__":
+    from datetime import date
+
+    ctx = base.Context(run_date=date.today())
+    run(ctx)
+    print("[DEBUG] Finished.")

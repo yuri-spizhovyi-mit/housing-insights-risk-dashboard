@@ -156,3 +156,12 @@ def run(ctx: base.Context):
         if callable(put):
             path = f"{ctx.s3_raw_prefix}/boc/{ctx.run_date.isoformat()}/V39079.tidy.csv"
             put(ctx, path, df.to_csv(index=False).encode("utf-8"), "text/csv")
+    print(f"[DEBUG] Wrote {len(df)} rows to metrics from BoC")
+
+
+if __name__ == "__main__":
+    from datetime import date
+
+    ctx = base.Context(run_date=date.today())
+    run(ctx)
+    print("[DEBUG] BoC ETL finished.")
