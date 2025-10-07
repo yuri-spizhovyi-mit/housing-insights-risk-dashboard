@@ -15,7 +15,7 @@ http://localhost:8000
 Production:
 
 ```http
-https://housing-insights-risk-dashboard.vercel.app/
+https://housing-insights-risk-dashboard.vercel.app/docs#/
 ```
 
 ---
