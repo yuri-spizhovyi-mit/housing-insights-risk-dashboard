@@ -9,11 +9,8 @@
 ![MinIO](https://img.shields.io/badge/MinIO-Storage-orange?logo=minio&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker&logoColor=white)
 
-> _“In theory, theory and practice are the same. In practice, they are not.”_  
-> — Albert Einstein
-
 Predicting the housing market has been attempted many times — and most models have failed.  
-This project takes another step forward, leveraging **up-to-date AI/ML technologies** with a clear and pragmatic design, built in just three months as an MVP.  
+This project takes another step forward, leveraging **modern AI/ML technologies** with a clear and pragmatic design, built in just three months as an MVP.  
 We approach it with both scientific rigor and a hopeful outlook for success.
 
 ---
@@ -22,62 +19,81 @@ We approach it with both scientific rigor and a hopeful outlook for success.
 
 The **Housing Insights + Risk Dashboard** is a 3-month MVP (Sept–Nov 2025) that combines:
 
-1. **Short-term Housing Insights** → AI/ML forecasts (1–2 years) of home prices & rents
+1. **Short-term Housing Insights** → AI/ML forecasts (1–2 years) of home prices & rents  
+   - Models: Prophet, LightGBM  
+   - Deliverables: forecasts for Kelowna, Vancouver, Toronto  
 
-   - Models: Prophet, LightGBM
-   - Deliverables: forecasts for Kelowna, Vancouver, Toronto
+2. **Long-term Housing Risk Dashboard** → Macro indicators and risk classification  
+   - Metrics: affordability, price-to-rent, debt-to-GDP, interest rates  
+   - Crisis-similarity classifier (e.g., “Today looks 80 % like 2008”)  
 
-2. **Long-term Housing Risk Dashboard** → Macro indicators and risk classification
-   - Metrics: affordability, price-to-rent, debt-to-GDP, interest rates
-   - Crisis-similarity classifier (e.g., “Today looks 80% like 2008”)
+---
+
+## 🧠 Theoretical Foundation
+
+The project is grounded in both **economic theory** and **machine learning methodology**, outlined in  
+[docs/manual/index.md](./docs/manual/index.md).  
+
+Key theoretical pillars include:
+
+- **Hedonic Pricing Theory** — housing prices reflect the sum of the implicit value of their attributes  
+- **Market Efficiency vs. Behavioral Biases** — exploring why prices deviate from fundamentals  
+- **Risk Modeling and Early-Warning Indicators** — inspired by financial stability research  
+- **AI/ML Forecasting Framework** — using time-series and ensemble models to capture trend, seasonality, and anomaly signals  
+
+Together, these provide the conceptual bridge between economic insight and data-driven forecasting.
 
 ---
 
 ## 🏗 Architecture
 
-- **Data Layer:** PostgreSQL (+PostGIS), MinIO for raw snapshots and artifacts
-- **ML Models (Python):** Forecasting, risk, anomalies, sentiment (HuggingFace DistilBERT)
-- **API Layer (Java):** Spring Boot REST API serving ML outputs from Postgres
-- **Frontend (TypeScript):** React dashboard with charts, risk gauge, and PDF download
-- **Reports:** 2-page PDF (Forecast + Risk) per city
+### **Phase 1 – MVP (Current)**  
+- **Data Layer:** PostgreSQL (+PostGIS), MinIO for raw snapshots and artifacts  
+- **ML Layer (Python):** Forecasting, risk indices, anomaly detection, sentiment analysis (DistilBERT)  
+- **Orchestration:** Docker Compose for Postgres, MinIO, and ETL pipelines  
+- **Frontend (React/TypeScript):** Interactive dashboard (in progress)  
 
-📖 See [docs/architecture.md](./docs/architecture.md) for details.
+### **Phase 2 – Planned Integration (Dec 2025 – Feb 2026)**  
+- **API Gateway (Java + Spring Boot):** Will serve ML forecasts and risk indicators from Postgres to frontend clients  
+- **Authentication & Role-Based Access:** Planned implementation for secure API endpoints  
+
+📖 See [docs/architecture.md](./docs/architecture.md) for technical details.
 
 ---
 
 ## 🚀 Deliverables
 
-- 📊 Interactive React dashboard (3 cities)
-- ⚙️ REST API (Spring Boot, PostgreSQL, MinIO)
-- 🤖 ML models: forecasting, risk index, anomaly detection, sentiment NLP
-- 📑 2-page PDF reports (Kelowna, Vancouver, Toronto)
+- 📊 AI-driven forecasts (Kelowna, Vancouver, Toronto)  
+- ⚙️ End-to-end ETL pipelines (CREA, CMHC, BoC, StatCan)  
+- 🤖 ML models: forecasting, risk index, anomaly detection, sentiment NLP  
+- 📑 Automated 2-page PDF reports per city  
+- 🌐 Planned REST API gateway (Spring Boot + Java 17)  
 
 ---
 
 ## 👥 Team
 
-- **Yuri** → Data engineering, ML models, reports
-- **Max** → API layer (Spring Boot) + Frontend (React/TS)
+- **Yuri** → Data Engineering, ML Models, Reports  
+- **Max** → Frontend (React/TypeScript) and upcoming Spring Boot API integration  
 
 ---
 
 ## 📂 Documentation
 
-See the [docs](./docs) folder for:
+See the [docs](./docs) folder for:  
 
-- [Architecture](./docs/architecture.md)
-- [Data Sources](./docs/data_sources.md)
-- [Modeling](./docs/modeling.md)
-- [API Reference](./docs/api_reference.md)
-- [Reports](./docs/reports.md)
-- [Presentations](./docs/presentations)
+- [Architecture](./docs/architecture.md)  
+- [Data Sources](./docs/data_sources.md)  
+- [Modeling](./docs/modeling.md)  
+- [Reports](./docs/reports.md)  
+- [Presentations](./docs/presentations)  
 
 ---
 
 ## 🗓 Timeline
 
-- Start: **Sept 1, 2025**
-- End: **Nov 20, 2025**
-- See [Project Roadmap](./docs/architecture.md#-project-roadmap-sept-1--nov-20-2025)
+- **Phase 1 (MVP):** Sept 1 – Nov 20 2025  
+- **Phase 2 (Integration):** Dec 2025 – Feb 2026  
+- See [Project Roadmap](https://github.com/users/yuri-spizhovyi-mit/projects/2/views/4)  
 
 ---
