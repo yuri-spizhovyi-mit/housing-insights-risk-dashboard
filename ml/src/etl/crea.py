@@ -233,7 +233,9 @@ def run(ctx):
     print("[DEBUG] CREA ETL starting...")
 
     # Local ZIP fallback
-    local_zip = Path(__file__).resolve().parents[3] / "data" / "MLS_HPI_September_2025_EN.zip"
+    local_zip = (
+        Path(__file__).resolve().parents[3] / "data" / "MLS_HPI_September_2025_EN.zip"
+    )
     if local_zip.exists():
         print(f"[DEBUG] Using local CREA ZIP → {local_zip}")
         with open(local_zip, "rb") as f:
@@ -273,13 +275,16 @@ def run(ctx):
         df["city"] = "Canada"
         df = df.rename(columns={"Date": "date"})
 
-##############################
-
+    ##############################
 
     # Convert to long format (one row per city/date/measure)
     value_cols = [c for c in df.columns if c not in ["date", "city"]]
-    tidy = df.melt(id_vars=["city", "date"], value_vars=value_cols,
-                   var_name="measure", value_name="index_value")
+    tidy = df.melt(
+        id_vars=["city", "date"],
+        value_vars=value_cols,
+        var_name="measure",
+        value_name="index_value",
+    )
 
     # clean
     tidy["date"] = pd.to_datetime(tidy["date"], errors="coerce")

@@ -2,6 +2,7 @@
 import pandas as pd
 from sqlalchemy import text
 
+
 def load_timeseries(engine, target: str, city: str) -> pd.DataFrame:
     """
     Load a time series for the given metric/target and city.

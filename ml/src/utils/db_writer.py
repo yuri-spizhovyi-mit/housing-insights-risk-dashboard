@@ -1,6 +1,7 @@
 # ml/src/utils/db_writer.py
 import pandas as pd
 
+
 def write_forecasts(conn_or_engine, results):
     """
     Write Prophet forecast results to public.model_predictions.
@@ -27,15 +28,26 @@ def write_forecasts(conn_or_engine, results):
     # Ensure required Prophet columns exist
     required = {"predict_date", "yhat", "yhat_lower", "yhat_upper"}
     if not required.issubset(df.columns):
-        print(f"[ERROR] Forecast dataframe missing columns: {required - set(df.columns)}")
+        print(
+            f"[ERROR] Forecast dataframe missing columns: {required - set(df.columns)}"
+        )
         return 0
 
     # Add default metadata columns if missing
     meta_cols = [
-        "model_name", "target", "horizon_months", "city",
-        "property_type", "beds", "baths",
-        "sqft_min", "sqft_max", "year_built_min", "year_built_max",
-        "features_version", "model_artifact_uri"
+        "model_name",
+        "target",
+        "horizon_months",
+        "city",
+        "property_type",
+        "beds",
+        "baths",
+        "sqft_min",
+        "sqft_max",
+        "year_built_min",
+        "year_built_max",
+        "features_version",
+        "model_artifact_uri",
     ]
     for c in meta_cols:
         if c not in df.columns:
@@ -54,7 +66,7 @@ def write_forecasts(conn_or_engine, results):
             schema="public",
             if_exists="append",
             index=False,
-            method="multi"
+            method="multi",
         )
         print(f"[OK] Inserted {len(df)} forecast rows → model_predictions")
 
@@ -84,16 +96,88 @@ def write_forecasts(conn_or_engine, results):
                         r.to_dict(),
                     )
             conn_or_engine.commit()
-            print(f"[OK] Inserted {len(df)} forecast rows → model_predictions (psycopg2 fallback)")
+            print(
+                f"[OK] Inserted {len(df)} forecast rows → model_predictions (psycopg2 fallback)"
+            )
         except Exception as e2:
             print(f"[ERROR] Psycopg2 insert failed: {e2}")
 
     return len(df)
 
 
-def write_risks(conn, results):
-    print("[DEBUG] write_risks() called — not implemented yet")
+def write_risks(conn_or_engine, results):
+    """Write ARIMA or computed risk indices to public.risk_predictions."""
+    if results is None:
+        print("[WARN] No risk results to write.")
+        return 0
+    if isinstance(results, pd.DataFrame):
+        if results.empty:
+            print("[WARN] Risk DataFrame empty.")
+            return 0
+        df = results.copy()
+    else:
+        df = pd.DataFrame(results)
+
+    required = {"city", "risk_type", "predict_date", "risk_value"}
+    if not required.issubset(df.columns):
+        print(f"[ERROR] risk_predictions missing columns: {required - set(df.columns)}")
+        return 0
+
+    try:
+        engine = (
+            conn_or_engine.engine
+            if hasattr(conn_or_engine, "engine")
+            else conn_or_engine
+        )
+        df.to_sql(
+            "risk_predictions",
+            engine,
+            schema="public",
+            if_exists="append",
+            index=False,
+            method="multi",
+        )
+        print(f"[OK] Inserted {len(df)} rows → risk_predictions")
+        return len(df)
+    except Exception as e:
+        print(f"[ERROR] write_risks() failed: {e}")
+        return 0
 
 
-def write_anomalies(conn, results):
-    print("[DEBUG] write_anomalies() called — not implemented yet")
+def write_anomalies(conn_or_engine, results):
+    """Write IsolationForest anomalies to public.anomaly_signals."""
+    if results is None:
+        print("[WARN] No anomaly results to write.")
+        return 0
+    if isinstance(results, pd.DataFrame):
+        if results.empty:
+            print("[WARN] Anomaly DataFrame empty.")
+            return 0
+        df = results.copy()
+    else:
+        df = pd.DataFrame(results)
+
+    required = {"city", "target", "detect_date", "anomaly_score", "is_anomaly"}
+    if not required.issubset(df.columns):
+        print(f"[ERROR] anomaly_signals missing columns: {required - set(df.columns)}")
+        return 0
+
+    try:
+        engine = (
+            conn_or_engine.engine
+            if hasattr(conn_or_engine, "engine")
+            else conn_or_engine
+        )
+        df.to_sql(
+            "anomaly_signals",
+            engine,
+            schema="public",
+            if_exists="append",
+            index=False,
+            method="multi",
+        )
+        print(f"[OK] Inserted {len(df)} rows → anomaly_signals")
+        return len(df)
+    except Exception as e:
+        print(f"[ERROR] write_anomalies() failed: {e}")
+        return 0
