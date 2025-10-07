@@ -96,7 +96,8 @@ def _run_one(engine, metric: str, city: str) -> None:
 
     for horizon_months, label in horizons.items():
         try:
-            forecast_res = run_forecasts(
+            # 🔹 1️⃣ Run Prophet forecast
+            forecast_res, model = run_forecasts(
                 df, city, metric, horizon_months=horizon_months
             )
 
@@ -108,50 +109,60 @@ def _run_one(engine, metric: str, city: str) -> None:
                 forecast_res["features_version"] = "v1.0"
                 forecast_res["model_artifact_uri"] = "ml/models/prophet"
 
-                # 🧹 remove existing rows for same (target, city, horizon)
+                # 🧹 Remove old forecasts for same city + metric + horizon
                 with engine.begin() as conn:
                     conn.execute(
                         text("""
                             DELETE FROM public.model_predictions
                             WHERE target = :target AND city = :city
                                   AND horizon_months = :horizon
-                            """),
+                        """),
                         {"target": metric, "city": city, "horizon": horizon_months},
                     )
 
+                # ✅ Write Prophet forecast
                 write_forecasts(engine, forecast_res)
                 print(
                     f"[OK] {label} forecast saved to model_predictions for {metric} – {city}"
                 )
+
+                # 🔹 2️⃣ Compute ARIMA risk on the forecast horizon
+                try:
+                    risk_res = calc_risk_indices(forecast_res, city, metric)
+                    if isinstance(risk_res, pd.DataFrame) and not risk_res.empty:
+                        risk_res["horizon_months"] = horizon_months
+                        write_risks(engine, risk_res)
+                        print(
+                            f"[OK] {label} risk indices saved to risk_predictions for {metric} – {city}"
+                        )
+                except Exception as e:
+                    print(
+                        f"[ERROR] ARIMA step failed for {metric} – {city} ({label}): {e}"
+                    )
+
+                # 🔹 3️⃣ Compute IsolationForest anomalies on the forecast horizon
+                try:
+                    anomaly_res = detect_anomalies(forecast_res, city, metric)
+                    if isinstance(anomaly_res, pd.DataFrame) and not anomaly_res.empty:
+                        anomaly_res["horizon_months"] = horizon_months
+                        write_anomalies(engine, anomaly_res)
+                        print(
+                            f"[OK] {label} anomalies saved to anomaly_signals for {metric} – {city}"
+                        )
+                except Exception as e:
+                    print(
+                        f"[ERROR] IsolationForest step failed for {metric} – {city} ({label}): {e}"
+                    )
+
             else:
-                print(f"[WARN] Forecast result invalid or empty for {metric} – {city}")
+                print(
+                    f"[WARN] Forecast result invalid or empty for {metric} – {city} ({label})"
+                )
 
         except Exception as e:
             print(f"[ERROR] Forecast step failed for {metric} – {city} ({label}): {e}")
 
-    # ----------------- ARIMA (Risk Indices) -----------------
-    forecast_res, model = run_forecasts(df, city, metric, horizon_months=horizon_months)
-
-    if isinstance(forecast_res, pd.DataFrame) and not forecast_res.empty:
-        write_forecasts(engine, forecast_res)
-        print(f"[OK] forecast saved to model_predictions for {metric} – {city}")
-
-        # 🔹 Now compute risk & anomalies on the same forecasted values
-        try:
-            risk_res = calc_risk_indices(forecast_res, city, metric)
-            if isinstance(risk_res, pd.DataFrame) and not risk_res.empty:
-                write_risks(engine, risk_res)
-                print(f"[OK] Risk indices saved for {metric} – {city}")
-        except Exception as e:
-            print(f"[ERROR] ARIMA step failed for {metric} – {city}: {e}")
-
-        try:
-            anomaly_res = detect_anomalies(forecast_res, city, metric)
-            if isinstance(anomaly_res, pd.DataFrame) and not anomaly_res.empty:
-                write_anomalies(engine, anomaly_res)
-                print(f"[OK] Anomalies saved for {metric} – {city}")
-        except Exception as e:
-            print(f"[ERROR] IsolationForest step failed for {metric} – {city}: {e}")
+    print(f"[DONE] All horizons completed for {metric} – {city}")
 
 
 def run_pipeline():
