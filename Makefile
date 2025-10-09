@@ -235,3 +235,7 @@ all:
 # make risk
 # make anomalies
 # make all
+
+features:
+	@echo "🧠 Building features..."
+	@python ml/src/features/build_features.py

@@ -34,22 +34,32 @@ if not DATABASE_URL:
 # 2. Utility functions
 # -----------------------------------------------------------
 
+
 def log(msg: str):
     """Pretty logger with timestamp."""
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
+
 def _load(engine):
     with engine.begin() as conn:
-        hpi = pd.read_sql("SELECT date, city, measure, index_value FROM public.house_price_index", conn)
-        rent = pd.read_sql("""
+        hpi = pd.read_sql(
+            "SELECT date, city, measure, index_value FROM public.house_price_index",
+            conn,
+        )
+        rent = pd.read_sql(
+            """
             SELECT date, city,
                    index_value AS rent_index,
                    median_rent_apartment_1br AS median_rent_1br,
                    median_rent_apartment_2br AS median_rent_2br,
                    median_rent_apartment_3br AS median_rent_3br
             FROM public.rent_index
-        """, conn)
-        metrics = pd.read_sql("SELECT date, city, metric, value FROM public.metrics", conn)
+        """,
+            conn,
+        )
+        metrics = pd.read_sql(
+            "SELECT date, city, metric, value FROM public.metrics", conn
+        )
     return hpi, rent, metrics
 
 
@@ -60,12 +70,16 @@ def _pivot_hpi(df: pd.DataFrame) -> pd.DataFrame:
         "Townhouse_Benchmark_SA": "hpi_townhouse_sa",
     }
     df["measure"] = df["measure"].map(lambda m: rename.get(m, m))
-    wide = df.pivot_table(index=["date", "city"], columns="measure", values="index_value").reset_index()
+    wide = df.pivot_table(
+        index=["date", "city"], columns="measure", values="index_value"
+    ).reset_index()
     return wide
 
 
 def _pivot_metrics(df: pd.DataFrame) -> pd.DataFrame:
-    return df.pivot_table(index=["date", "city"], columns="metric", values="value").reset_index()
+    return df.pivot_table(
+        index=["date", "city"], columns="metric", values="value"
+    ).reset_index()
 
 
 def _spread_canada_macros(df: pd.DataFrame, cities: list) -> pd.DataFrame:
@@ -82,7 +96,9 @@ def _spread_canada_macros(df: pd.DataFrame, cities: list) -> pd.DataFrame:
             continue
 
         city_df = df[df["city"] == city]
-        merged = pd.merge(city_df, canada, on="date", how="left", suffixes=("", "_national"))
+        merged = pd.merge(
+            city_df, canada, on="date", how="left", suffixes=("", "_national")
+        )
         merged["city"] = city
         out.append(merged)
 
@@ -95,10 +111,15 @@ def _engineer(df: pd.DataFrame) -> pd.DataFrame:
 
     # Price-to-rent ratio
     if "hpi_composite_sa" in df.columns and "rent_index" in df.columns:
-        df["price_to_rent"] = df["hpi_composite_sa"] / df["rent_index"].replace({0: pd.NA})
+        df["price_to_rent"] = df["hpi_composite_sa"] / df["rent_index"].replace(
+            {0: pd.NA}
+        )
 
     # Month-over-month percentage changes
-    for col, newcol in [("hpi_composite_sa", "hpi_mom_pct"), ("rent_index", "rent_mom_pct")]:
+    for col, newcol in [
+        ("hpi_composite_sa", "hpi_mom_pct"),
+        ("rent_index", "rent_mom_pct"),
+    ]:
         if col in df.columns:
             df[newcol] = df.groupby("city")[col].pct_change()
 
@@ -113,8 +134,15 @@ def write_features(engine, df: pd.DataFrame):
 
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS public._features_stage;"))
-        df.to_sql("_features_stage", conn.connection, schema="public", if_exists="replace", index=False)
-        conn.execute(text("""
+        df.to_sql(
+            "_features_stage",
+            conn.connection,
+            schema="public",
+            if_exists="replace",
+            index=False,
+        )
+        conn.execute(
+            text("""
             INSERT INTO public.features AS f
             (date, city,
              hpi_composite_sa, hpi_apartment_sa, hpi_townhouse_sa,
@@ -136,7 +164,8 @@ def write_features(engine, df: pd.DataFrame):
                 rent_mom_pct = EXCLUDED.rent_mom_pct,
                 features_version = EXCLUDED.features_version;
             DROP TABLE public._features_stage;
-        """))
+        """)
+        )
         log(f"✅ Upserted {len(df)} feature rows.")
 
 
@@ -155,9 +184,15 @@ def build_features(engine):
     merged = merged.merge(metrics_spread, on=["date", "city"], how="left")
 
     features = _engineer(merged)
-    features = features.dropna(subset=["date"]).sort_values(["city", "date"]).reset_index(drop=True)
+    features = (
+        features.dropna(subset=["date"])
+        .sort_values(["city", "date"])
+        .reset_index(drop=True)
+    )
 
-    log(f"✅ Built feature table: {features.shape[0]} rows, {features.shape[1]} columns.")
+    log(
+        f"✅ Built feature table: {features.shape[0]} rows, {features.shape[1]} columns."
+    )
     return features
 
 
