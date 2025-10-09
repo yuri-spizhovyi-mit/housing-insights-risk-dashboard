@@ -220,3 +220,62 @@ CREATE TABLE IF NOT EXISTS public.metrics (
     source TEXT DEFAULT 'unknown',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- V5__features.sql
+-- -----------------------------------------------------------------------------
+-- Macro-level Feature Table for Forecasting, Risk, and Anomaly Models
+-- -----------------------------------------------------------------------------
+-- Purpose:
+--   Aggregates ETL outputs (HPI, rents, metrics) into a city-date feature table
+--   consumed by modeling layer (Prophet, ARIMA, Isolation Forest, etc.).
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.features (
+    -- Primary Key
+    date                DATE            NOT NULL,
+    city                VARCHAR(100)    NOT NULL,
+
+    -- --- Target Variables (HPI & Rent) --------------------------------------
+    hpi_composite_sa    DOUBLE PRECISION,
+    hpi_apartment_sa    DOUBLE PRECISION,
+    hpi_townhouse_sa    DOUBLE PRECISION,
+    rent_index          NUMERIC(10, 2),
+    median_rent_1br     NUMERIC(12, 2),
+    median_rent_2br     NUMERIC(12, 2),
+    median_rent_3br     NUMERIC(12, 2),
+
+    -- --- Macro Indicators (BoC, StatCan, CMHC, etc.) ------------------------
+    BoC_OvernightRate   NUMERIC(6, 3),
+    BoC_PrimeRate       NUMERIC(6, 3),
+    CPI_AllItems        NUMERIC(8, 3),
+    UnemploymentRate    NUMERIC(6, 3),
+    GDP_GrowthRate      NUMERIC(6, 3),
+
+    -- --- Derived & Engineered Features --------------------------------------
+    price_to_rent       DOUBLE PRECISION,      -- HPI / Rent Index
+    hpi_mom_pct         DOUBLE PRECISION,      -- Month-over-month % change (HPI)
+    rent_mom_pct        DOUBLE PRECISION,      -- Month-over-month % change (Rent)
+
+    -- --- Metadata -----------------------------------------------------------
+    features_version    TEXT DEFAULT 'v1.0',
+    created_at          TIMESTAMPTZ DEFAULT now(),
+
+    -- Primary Key constraint
+    CONSTRAINT features_pkey PRIMARY KEY (date, city)
+);
+
+-- Helpful index for dashboard/model queries by city/date
+CREATE INDEX IF NOT EXISTS idx_features_city_date
+    ON public.features (city, date DESC);
+
+COMMENT ON TABLE public.features IS
+    'Macro-level engineered features used for forecasting, risk, and anomaly models.';
+
+COMMENT ON COLUMN public.features.hpi_composite_sa IS
+    'Composite MLS® Home Price Index, seasonally adjusted.';
+COMMENT ON COLUMN public.features.rent_index IS
+    'Synthetic or aggregated rent index (median or benchmark).';
+COMMENT ON COLUMN public.features.price_to_rent IS
+    'Computed ratio of HPI to Rent Index.';
+COMMENT ON COLUMN public.features.features_version IS
+    'Version tag of feature schema to track evolution.';
