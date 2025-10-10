@@ -256,8 +256,14 @@ CREATE TABLE IF NOT EXISTS public.features (
     hpi_mom_pct         DOUBLE PRECISION,      -- Month-over-month % change (HPI)
     rent_mom_pct        DOUBLE PRECISION,      -- Month-over-month % change (Rent)
 
+    -- --- Micro-Level (Property-Specific) Features ---------------------------
+    beds                NUMERIC(3, 1),         -- Average bedrooms
+    baths               NUMERIC(3, 1),         -- Average bathrooms
+    sqft_avg            NUMERIC(10, 2),        -- Average living area (sqft)
+    property_type       TEXT,                  -- Condo / House / Apartment / Townhouse
+
     -- --- Metadata -----------------------------------------------------------
-    features_version    TEXT DEFAULT 'v1.0',
+    features_version    TEXT DEFAULT 'v1.1',
     created_at          TIMESTAMPTZ DEFAULT now(),
 
     -- Primary Key constraint
