@@ -130,11 +130,13 @@ def load_boc_series(
 
 def run(ctx: base.Context):
     """
-    Production run: fetch BoC Valet series and upsert into public.metrics via write_df.
-    Uses optional START_DATE / END_DATE (YYYY-MM-DD) from env for backfills.
+    Production run: fetch BoC Valet series and upsert into public.metrics via write_metrics_upsert.
     """
-    series_ids = ["V39079"]
-    alias = {"V39079": "BoC_OvernightRate"}
+    series_ids = ["V39079", "V80691335"]
+    alias = {
+        "V39079": "overnightrate",
+        "V80691335": "primerate",
+    }
 
     start_date = os.getenv("START_DATE")
     end_date = os.getenv("END_DATE")
@@ -148,14 +150,14 @@ def run(ctx: base.Context):
         end_date=end_date,
     )
 
-    # Write using generic writer so tests can intercept table "metrics"
-    base.write_df(df, "metrics", ctx)
-    # Optional snapshot to raw
+    base.write_metrics_upsert(df, ctx)
+
     if df is not None and not df.empty:
         put = getattr(base, "put_raw_bytes", None)
         if callable(put):
-            path = f"{ctx.s3_raw_prefix}/boc/{ctx.run_date.isoformat()}/V39079.tidy.csv"
+            path = f"{ctx.s3_raw_prefix}/boc/{ctx.run_date.isoformat()}/boc_metrics.tidy.csv"
             put(ctx, path, df.to_csv(index=False).encode("utf-8"), "text/csv")
+
     print(f"[DEBUG] Wrote {len(df)} rows to metrics from BoC")
 
 

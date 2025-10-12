@@ -37,7 +37,7 @@ graph TD
         RISK_PRED -->|GET /risk| FASTAPI
         SENT -->|GET /sentiment| FASTAPI
         ANOMALY -->|GET /anomalies| FASTAPI
-        FASTAPI --> REPORT[/report/{city}.pdf/]
+        FASTAPI --> REPORT["/report/{city}.pdf"]
     end
 
     subgraph UI["Frontend (React + TypeScript)"]

@@ -28,6 +28,15 @@ def load_timeseries(engine, target: str, city: str) -> pd.DataFrame:
             """)
             df = pd.read_sql(query, conn, params={"city": city})
 
+        elif target == "features":
+            query = text("""
+                SELECT date, hpi_composite_sa AS value
+                FROM public.features
+                WHERE city = :city
+                ORDER BY date
+            """)
+            df = pd.read_sql(query, conn, params={"city": city})
+
         else:
             # Default for metrics table (BoC, StatCan, CMHC)
             query = text("""

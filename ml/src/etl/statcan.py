@@ -14,8 +14,21 @@ sys.stderr = sys.stdout
 
 # Default table to load when calling run(ctx)
 # CPI, all-items, monthly: 18-10-0004-01 -> 1810000401
-DEFAULT_PID = os.getenv("STATCAN_PID", "1810000401")
-DEFAULT_METRIC = os.getenv("STATCAN_METRIC", "StatCan_CPI_AllItems")
+# DEFAULT_PID = os.getenv("STATCAN_PID", "1810000401")
+# DEFAULT_METRIC = os.getenv("STATCAN_METRIC", "StatCan_CPI_AllItems")
+# --- METRIC DEFINITIONS ---
+# PID references from StatCan Data Tables
+# - CPI All-items:        18-10-0004-01 → 1810000401
+# - Unemployment rate:    14-10-0287-03 → 1410028703
+# - GDP growth rate (%):  36-10-0434-02 → 3610043402
+
+DEFAULT_PIDS = ["1810000401", "1410028703", "3610043402"]
+DEFAULT_METRIC_NAMES = {
+    "1810000401": "cpi_allitems",
+    "1410028703": "unemploymentrate",
+    "3610043402": "gdp_growthrate",
+}
+
 
 # Canonical geographies we keep for the MVP
 TARGET_GEOS = {"Kelowna", "Vancouver", "Toronto", "Canada"}
@@ -118,27 +131,21 @@ def load_statcan_table(
     tidy = _normalize_common(df, metric_name=metric)
 
     # Idempotent upsert into metrics (PK: city, date, metric)
-    base.write_metrics_upsert(tidy, engine, schema=schema)
+    base.write_metrics_upsert(tidy, ctx)
     return tidy
 
 
 def load_many(
     pids: Iterable[str],
     metric_names: Optional[Dict[str, str]],
-    engine,
-    schema: str = "public",
+    ctx: Context,
     product_filter_by_pid: Optional[Dict[str, str]] = None,
 ) -> pd.DataFrame:
-    """
-    Convenience loader for multiple StatCan tables.
-    - metric_names: optional mapping pid -> metric label
-    - product_filter_by_pid: optional mapping pid -> product substring filter
-    """
     frames = []
     for pid in pids:
         m = (metric_names or {}).get(pid)
         pf = (product_filter_by_pid or {}).get(pid)
-        frames.append(load_statcan_table(pid, m, engine, schema, pf))
+        frames.append(load_statcan_table(pid, m, ctx, pf))
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
@@ -157,65 +164,47 @@ def _normalize_pid_like(pid_like: str) -> str:
 
 def run(ctx: Context):
     """
-    Default 'statcan' pipeline entry:
-      - Loads CPI (all-items) monthly series
-      - Writes via base.write_df(...) so tests can intercept the 'metrics' table
-      - Snapshots raw + tidy to MinIO
+    StatCan pipeline entrypoint:
+      - Loads CPI (All-items), Unemployment Rate, GDP Growth Rate
+      - Writes to `public.metrics` using base.write_metrics_upsert
+      - Snapshots raw and tidy CSVs to MinIO
     """
-    pid = DEFAULT_PID
-    metric = DEFAULT_METRIC
+    print("[DEBUG] Starting StatCan ETL (CPI, Unemployment, GDP)")
 
-    # ────── Major step 1 ──────
-    print("[DEBUG] Step 1: Starting StatCan ETL for PID =", pid)
+    pids = DEFAULT_PIDS
+    metric_names = DEFAULT_METRIC_NAMES
+    product_filter_by_pid = {
+        "1810000401": "All-items",  # CPI filter
+        # GDP and Unemployment tables don't need filtering
+    }
 
-    # Download full table
-    df_raw = download_table_csv(pid)
-    print("[DEBUG] Step 2: Raw DataFrame downloaded — shape:", df_raw.shape)
-    print("[DEBUG] Step 2: Raw columns:", list(df_raw.columns))
-
-    # Save raw snapshot
-    put_raw_bytes(
-        ctx,
-        f"{ctx.s3_raw_prefix}/statcan/{ctx.run_date.isoformat()}/{_normalize_pid_like(pid)}.csv",
-        df_raw.to_csv(index=False).encode("utf-8"),
-        "text/csv",
+    tidy = load_many(
+        pids=pids,
+        metric_names=metric_names,
+        ctx=ctx,
+        product_filter_by_pid=product_filter_by_pid,
     )
-    print("[DEBUG] Step 3: Raw CSV snapshot written to MinIO")
 
-    # ────── Major step 4 ──────
-    print("[DEBUG] Step 4: Filtering 'All-items' rows (if available)")
-    prod_cols = [c for c in df_raw.columns if "product" in str(c).lower()]
-    df = df_raw.copy()
-    for pc in prod_cols:
-        df = df[df[pc].astype(str).str.contains("All-items", case=False, na=False)]
-    print("[DEBUG] Step 4: Filtered DataFrame shape:", df.shape)
+    if tidy is None or tidy.empty:
+        print("[DEBUG] WARNING: No rows loaded from StatCan")
+        return tidy
 
-    # ────── Major step 5 ──────
-    print("[DEBUG] Step 5: Normalizing data to metrics format")
-    tidy = _normalize_common(df, metric_name=metric)
-    print("[DEBUG] Step 5: Tidy shape:", tidy.shape)
-    if not tidy.empty:
-        print("[DEBUG] Step 5: Sample tidy rows:")
-        print(tidy.head(10))
-    else:
-        print("[DEBUG] Step 5: WARNING — tidy DataFrame is empty")
+    # Normalize to lowercase just in case
+    tidy["metric"] = tidy["metric"].str.lower()
 
-    # ────── Major step 6 ──────
-    print("[DEBUG] Step 6: Writing tidy DataFrame to database → 'metrics'")
+    print(f"[DEBUG] Step: Writing {len(tidy)} rows to database → 'metrics'")
     base.write_metrics_upsert(tidy, ctx)
-    print("[DEBUG] Step 6: Write complete")
 
-    # ────── Major step 7 ──────
-    print("[DEBUG] Step 7: Snapshot tidy CSV to MinIO")
+    # Snapshot tidy
     put_raw_bytes(
         ctx,
-        f"{ctx.s3_raw_prefix}/statcan/{ctx.run_date.isoformat()}/{_normalize_pid_like(pid)}.tidy.csv",
+        f"{ctx.s3_raw_prefix}/statcan/{ctx.run_date.isoformat()}/statcan_metrics.tidy.csv",
         tidy.to_csv(index=False).encode("utf-8"),
         "text/csv",
     )
-    print("[DEBUG] Step 7: Tidy CSV snapshot written successfully")
 
-    print("[DEBUG] Step 8: ETL complete — rows written:", len(tidy))
+    print("[DEBUG] StatCan ETL complete — rows written:", len(tidy))
+    print("[DEBUG] Metrics present:", tidy["metric"].unique().tolist())
     return tidy
 
 

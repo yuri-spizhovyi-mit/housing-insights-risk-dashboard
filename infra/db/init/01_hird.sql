@@ -230,45 +230,49 @@ CREATE TABLE IF NOT EXISTS public.metrics (
 --   consumed by modeling layer (Prophet, ARIMA, Isolation Forest, etc.).
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS public.features (
-    -- Primary Key
+DROP TABLE IF EXISTS public.features CASCADE;
+
+CREATE TABLE public.features (
+    -- --- Keys ---------------------------------------------------------------
     date                DATE            NOT NULL,
     city                VARCHAR(100)    NOT NULL,
 
-    -- --- Target Variables (HPI & Rent) --------------------------------------
+    -- --- Target Variables (Rent & HPI) -------------------------------------
+    price_avg           NUMERIC(14, 2),         -- average rent price per month
+    rent_index          NUMERIC(12, 2),         -- median rent per city-month
     hpi_composite_sa    DOUBLE PRECISION,
     hpi_apartment_sa    DOUBLE PRECISION,
     hpi_townhouse_sa    DOUBLE PRECISION,
-    rent_index          NUMERIC(10, 2),
-    median_rent_1br     NUMERIC(12, 2),
-    median_rent_2br     NUMERIC(12, 2),
-    median_rent_3br     NUMERIC(12, 2),
 
-    -- --- Macro Indicators (BoC, StatCan, CMHC, etc.) ------------------------
-    BoC_OvernightRate   NUMERIC(6, 3),
-    BoC_PrimeRate       NUMERIC(6, 3),
-    CPI_AllItems        NUMERIC(8, 3),
-    UnemploymentRate    NUMERIC(6, 3),
-    GDP_GrowthRate      NUMERIC(6, 3),
+    -- --- Macro Indicators (BoC + StatCan) ----------------------------------
+    overnightrate       NUMERIC(8, 4),
+    primerate           NUMERIC(8, 4),
+    cpi_allitems        NUMERIC(10, 3),
+    unemploymentrate    NUMERIC(8, 3),
+    gdp_growthrate      NUMERIC(8, 3),
 
-    -- --- Derived & Engineered Features --------------------------------------
-    price_to_rent       DOUBLE PRECISION,      -- HPI / Rent Index
-    hpi_mom_pct         DOUBLE PRECISION,      -- Month-over-month % change (HPI)
-    rent_mom_pct        DOUBLE PRECISION,      -- Month-over-month % change (Rent)
+    -- --- Micro-Level (Property-Specific) -----------------------------------
+    bedrooms_avg        NUMERIC(4, 1),
+    bathrooms_avg       NUMERIC(4, 1),
+    sqft_avg            NUMERIC(12, 2),
+    property_type       TEXT,
 
-    -- --- Micro-Level (Property-Specific) Features ---------------------------
-    beds                NUMERIC(3, 1),         -- Average bedrooms
-    baths               NUMERIC(3, 1),         -- Average bathrooms
-    sqft_avg            NUMERIC(10, 2),        -- Average living area (sqft)
-    property_type       TEXT,                  -- Condo / House / Apartment / Townhouse
+    -- --- Derived & Engineered Features -------------------------------------
+    price_to_rent       DOUBLE PRECISION,       -- hpi_composite_sa / rent_index
+    price_to_sqft       DOUBLE PRECISION,       -- price_avg / sqft_avg
+    price_mom_pct       DOUBLE PRECISION,       -- MoM growth of avg price
+    rent_mom_pct        DOUBLE PRECISION,       -- MoM growth of rent index
+    hpi_mom_pct         DOUBLE PRECISION,       -- MoM growth of HPI composite
 
     -- --- Metadata -----------------------------------------------------------
-    features_version    TEXT DEFAULT 'v1.1',
+    features_version    TEXT DEFAULT 'v2.0',
     created_at          TIMESTAMPTZ DEFAULT now(),
 
-    -- Primary Key constraint
     CONSTRAINT features_pkey PRIMARY KEY (date, city)
 );
+
+
+
 
 -- Helpful index for dashboard/model queries by city/date
 CREATE INDEX IF NOT EXISTS idx_features_city_date
