@@ -236,12 +236,36 @@ def _parse_detail(html: str) -> Dict:
     bathrooms = _first_int(RE_BATHS, joined)
     area_sqft = _first_int(RE_SQFT, joined)
 
+    # ---- property_type detection ----
     property_type = None
+
+    # 1️⃣ Craigslist explicit field (rare)
     for span in soup.select(".attrgroup span"):
         txt = span.get_text(" ", strip=True).lower()
         if "housing type:" in txt:
             property_type = _clean_text(txt.split(":", 1)[-1])
             break
+
+    # 2️⃣ Infer from title or body text if missing
+    if not property_type:
+        text_blob = " ".join([title or "", soup.get_text(" ", strip=True).lower()])
+
+        if any(k in text_blob for k in ["townhome", "townhouse"]):
+            property_type = "townhouse"
+        elif "condo" in text_blob:
+            property_type = "condo"
+        elif "apartment" in text_blob or "apt" in text_blob:
+            property_type = "apartment"
+        elif "basement" in text_blob:
+            property_type = "basement"
+        elif "suite" in text_blob:
+            property_type = "suite"
+        elif "duplex" in text_blob:
+            property_type = "duplex"
+        elif "house" in text_blob or "home" in text_blob:
+            property_type = "house"
+        else:
+            property_type = "unknown"
 
     # ---- year_built (strict) ----
     year_built = None
@@ -342,16 +366,17 @@ def scrape_craigslist_to_listings_raw(
                 "year_built": rec["year_built"],
                 "description": rec["description"],
             }
+            # print(f"[DEBUG] Parsed row: {row}")
             batch.append(row)
 
             if len(batch) >= 50:
+                print(f"[DEBUG] Writing final batch size={len(batch)}")
                 written_total += _write_rows(batch)
                 batch.clear()
         except Exception as e:
             print(f"[WARN] {e} -> {url}")
 
         time.sleep(sleep_sec)
-
     written_total += _write_rows(batch)
     return written_total
 
