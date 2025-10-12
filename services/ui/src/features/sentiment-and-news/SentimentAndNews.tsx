@@ -3,8 +3,8 @@ import { useFilters } from "../../context/FilterContext";
 import Frame from "../../ui/Frame";
 import Message from "../../ui/Message";
 import NewsItem from "./NewsItem";
-import SentimentAndNewsHeader from "./SentimentAndNewsHeader";
 import { useSentiments } from "./useSentiments";
+import { Newspaper } from "lucide-react";
 
 function SentimentAndNews() {
   const { city } = useFilters();
@@ -21,7 +21,10 @@ function SentimentAndNews() {
           className="mb-6"
         />
       ) : (
-        <SentimentAndNewsHeader />
+        <Frame.Header
+          leftIcon={<Newspaper className="size-4" />}
+          title="Sentiment & News"
+        />
       )}
 
       <div className="h-64">

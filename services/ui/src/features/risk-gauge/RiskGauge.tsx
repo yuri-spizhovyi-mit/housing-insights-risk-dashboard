@@ -1,4 +1,3 @@
-import RiskGaugeHeader from "./RiskGaugeHeader";
 import Frame from "../../ui/Frame";
 import Message from "../../ui/Message";
 import RiskGaugeChart from "./RiskGaugeChart";
@@ -26,10 +25,13 @@ function RiskGauge() {
           className="mb-9"
         />
       ) : (
-        <RiskGaugeHeader />
+        <Frame.Header
+          title="Risk Gauge (macro + local)"
+          details="composite index (stub)"
+        />
       )}
 
-      <div className="min-h-64 h-full mb-4 flex items-center">
+      <Frame.Body className="min-h-64 h-full flex items-center">
         {isFetching ? (
           <div className="flex gap-8 sm:gap-4 mb-9 flex-col sm:flex-row flex-wrap items-start sm:items-center w-full">
             <div className="flex-[0.5] flex items-center justify-center w-full">
@@ -59,9 +61,9 @@ function RiskGauge() {
             <BreakdownList breakdown={risk?.breakdown} />
           </div>
         )}
-      </div>
+      </Frame.Body>
 
-      <div className="mt-auto text-xs flex items-start gap-2 opacity-70">
+      <Frame.Footer className=" text-xs flex items-start gap-2 opacity-70">
         {isFetching ? (
           <Skeleton
             variant="rounded"
@@ -79,7 +81,7 @@ function RiskGauge() {
             </p>
           </>
         )}
-      </div>
+      </Frame.Footer>
     </Frame>
   );
 }

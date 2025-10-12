@@ -1,11 +1,11 @@
 import Frame from "../../../ui/Frame";
-import RentForecastHeader from "./RentForecastHeader";
 import Message from "../../../ui/Message";
 import RentForecastChart from "./RentForecastChart";
 import Skeleton from "@mui/material/Skeleton";
 
 import { useFilters } from "../../../context/FilterContext";
 import { useForecast } from "../useForecast";
+import { LineChartIcon } from "lucide-react";
 
 function RentForecast() {
   const filters = useFilters();
@@ -22,10 +22,14 @@ function RentForecast() {
           className="mb-9"
         />
       ) : (
-        <RentForecastHeader />
+        <Frame.Header
+          leftIcon={<LineChartIcon className="size-6" />}
+          title="Rent Price Forecast"
+          details="baseline (stub)"
+        />
       )}
 
-      <div className="h-64 flex-1">
+      <Frame.Body className="min-h-64 flex-1">
         {isFetching ? (
           <Skeleton
             variant="rounded"
@@ -42,7 +46,7 @@ function RentForecast() {
         ) : (
           <RentForecastChart data={forecast?.data} />
         )}
-      </div>
+      </Frame.Body>
     </Frame>
   );
 }

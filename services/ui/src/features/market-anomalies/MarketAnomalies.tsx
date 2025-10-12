@@ -1,14 +1,17 @@
-import Frame from "../../../ui/Frame";
-import { useFilters } from "../../../context/FilterContext";
-import Message from "../../../ui/Message";
-import HomePriceForecastChart from "./HomePriceForecastChart";
-import { useForecast } from "../useForecast";
+import { Activity } from "lucide-react";
+import { useFilters } from "../../context/FilterContext";
 import Skeleton from "@mui/material/Skeleton";
-import { Home } from "lucide-react";
+import Message from "../../ui/Message";
+import Frame from "../../ui/Frame";
+import { useMarketAnomalies } from "./useMarketAnomalies";
+import MarketAnomaliesChart from "./MarketAnomaliesChart";
 
-function HomePriceForecast() {
-  const filters = useFilters();
-  const { forecast, error, isFetching } = useForecast(filters, "price");
+function MarketAnomalies() {
+  const { city } = useFilters();
+  const { marketAnomalies, error, isFetching } = useMarketAnomalies(
+    city,
+    "rent"
+  );
 
   return (
     <Frame className="col-span-12 lg:col-span-8 opacity-100 flex flex-col">
@@ -22,9 +25,9 @@ function HomePriceForecast() {
         />
       ) : (
         <Frame.Header
-          leftIcon={<Home className="size-5 opacity-80" />}
-          title="Home Price Forecast"
-          details="prophet-like · 80/95% bands (stub)"
+          leftIcon={<Activity className="size-5 opacity-80" />}
+          title="Market Anomalies"
+          details="Isonlation Forest (stub)"
         />
       )}
 
@@ -43,11 +46,11 @@ function HomePriceForecast() {
             details={error.details}
           />
         ) : (
-          <HomePriceForecastChart data={forecast?.data} />
+          <MarketAnomaliesChart data={marketAnomalies?.signals} />
         )}
       </Frame.Body>
     </Frame>
   );
 }
 
-export default HomePriceForecast;
+export default MarketAnomalies;

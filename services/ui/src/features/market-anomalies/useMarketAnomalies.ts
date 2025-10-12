@@ -1,0 +1,17 @@
+import type { MarketAnomaliesSeries } from "../../types/market-anomalies.types";
+import { getMarketAnomalies } from "../../services/dashboard";
+import type { ApiError } from "../../services/errors";
+import { useQuery } from "@tanstack/react-query";
+
+export function useMarketAnomalies(city: string, target: string) {
+  const {
+    data: marketAnomalies,
+    error,
+    isFetching,
+  } = useQuery<MarketAnomaliesSeries, ApiError>({
+    queryKey: ["market-anomalies"],
+    queryFn: () => getMarketAnomalies(city, target),
+  });
+
+  return { marketAnomalies, isFetching, error };
+}
