@@ -12,7 +12,7 @@ function RentForecast() {
   const { forecast, error, isFetching } = useForecast(filters, "rent");
 
   return (
-    <Frame className="col-span-12 lg:col-span-8">
+    <Frame className="col-span-12 lg:col-span-8 flex flex-col">
       {isFetching ? (
         <Skeleton
           variant="rounded"
@@ -25,7 +25,7 @@ function RentForecast() {
         <RentForecastHeader />
       )}
 
-      <div className="h-64">
+      <div className="h-64 flex-1">
         {isFetching ? (
           <Skeleton
             variant="rounded"

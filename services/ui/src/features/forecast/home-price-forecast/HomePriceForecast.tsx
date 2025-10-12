@@ -11,7 +11,7 @@ function HomePriceForecast() {
   const { forecast, error, isFetching } = useForecast(filters, "price");
 
   return (
-    <Frame className="col-span-12 lg:col-span-8 opacity-100">
+    <Frame className="col-span-12 lg:col-span-8 opacity-100 flex flex-col">
       {isFetching ? (
         <Skeleton
           variant="rounded"
@@ -24,7 +24,7 @@ function HomePriceForecast() {
         <HomePriceForecastHeader />
       )}
 
-      <div className="h-64">
+      <div className="h-64 flex-1">
         {isFetching ? (
           <Skeleton
             variant="rounded"
