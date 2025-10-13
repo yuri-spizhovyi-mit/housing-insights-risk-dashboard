@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Sun, Moon } from "lucide-react";
 
 function ThemeToggle() {
-  const [isLight, setIsLight] = useState(false);
+  const [isLight, setIsLight] = useState(true);
 
   useEffect(() => {
     document.documentElement.classList.toggle("light", isLight);
