@@ -8,7 +8,7 @@ function HorizonSelector() {
   return (
     <SelectorShell type="Horizon" className="px-4">
       <div
-        className="flex rounded-xl overflow-hidden border"
+        className="flex rounded-xl overflow-hidden border w-[70%] ml-auto cursor-pointer"
         style={{
           borderColor: "var(--color-selector-border)",
           backgroundColor: "var(--color-selector-bg)",
@@ -18,7 +18,7 @@ function HorizonSelector() {
           <button
             key={h}
             onClick={() => dispatch({ type: "SET_HORIZON", payload: h })}
-            className="px-3 py-1.5 text-sm font-medium transition-all"
+            className="px-3 py-1.5 text-sm font-medium transition-all w-full"
             style={{
               background:
                 horizon === h
