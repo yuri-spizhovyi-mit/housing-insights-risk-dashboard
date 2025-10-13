@@ -7,16 +7,38 @@ function HorizonSelector() {
 
   return (
     <SelectorShell type="Horizon" className="px-4">
-      <div className="flex rounded-xl overflow-hidden border border-neutral-700">
+      <div
+        className="flex rounded-xl overflow-hidden border"
+        style={{
+          borderColor: "var(--color-selector-border)",
+          backgroundColor: "var(--color-selector-bg)",
+        }}
+      >
         {horizons.map((h) => (
           <button
             key={h}
             onClick={() => dispatch({ type: "SET_HORIZON", payload: h })}
-            className={`px-3 py-1.5 text-sm transition-colors ${
-              horizon === h
-                ? "bg-neutral-200 text-neutral-900"
-                : "bg-neutral-900 hover:bg-neutral-800 text-neutral-100"
-            }`}
+            className="px-3 py-1.5 text-sm font-medium transition-all"
+            style={{
+              background:
+                horizon === h
+                  ? "var(--color-selector-btn-active-bg)"
+                  : "var(--color-selector-btn-inactive-bg)",
+              color:
+                horizon === h
+                  ? "var(--color-selector-btn-active-text)"
+                  : "var(--color-selector-btn-inactive-text)",
+            }}
+            onMouseEnter={(e) => {
+              if (horizon !== h)
+                e.currentTarget.style.backgroundColor =
+                  "var(--color-selector-btn-inactive-hover-bg)";
+            }}
+            onMouseLeave={(e) => {
+              if (horizon !== h)
+                e.currentTarget.style.backgroundColor =
+                  "var(--color-selector-btn-inactive-bg)";
+            }}
           >
             {h}
           </button>

@@ -1,7 +1,162 @@
 @import "tailwindcss";
 
+:root {
+  --app-bg-color: #0a0a0a;
+  --text-primary: #fffbeb;
+  --header-bg: rgba(23, 23, 23, 0.6);
+  --frame-bg: #171717;
+  --sentiment-bg: #0a0a0a;
+
+  --bg-skeleton-base: rgba(255, 255, 255, 0.239);
+  --bg-skeleton-highlight: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  --bg-surface-1: #1a1a1a;
+  --bg-surface-2: #121212;
+  --bg-surface-3: #0a0a0a;
+
+  --tone-pos-bg: transparent;
+  --tone-pos-border: #34d399;
+  --tone-pos-text: #6ee7b7;
+
+  --tone-neg-bg: transparent;
+  --tone-neg-border: #fb7185;
+  --tone-neg-text: #fda4af;
+
+  --tone-neu-bg: transparent;
+  --tone-neu-border: #525252;
+  --tone-neu-text: #d4d4d4;
+
+  --msg-error-bg: rgba(127, 29, 29, 0.35);
+  --msg-error-border: #f87171;
+  --msg-error-text: #fecaca;
+
+  --msg-info-bg: rgba(30, 58, 138, 0.25);
+  --msg-info-border: #60a5fa;
+  --msg-info-text: #bfdbfe;
+
+  --bg-sentiment-card: rgba(23, 23, 23, 0.8);
+  --border-sentiment-card: #262626;
+
+  /* Horizon selector (dark mode) */
+  --selector-bg: #0a0a0a;
+  --selector-border: #404040;
+  --selector-btn-active-bg: #e5e5e5;
+  --selector-btn-active-text: #111;
+  --selector-btn-inactive-bg: #171717;
+  --selector-btn-inactive-hover-bg: #262626;
+  --selector-btn-inactive-text: #fafafa;
+
+  --surface-muted-bg: #262626;
+}
+
+.light {
+  --app-bg-color: #f9fafb;
+  --text-primary: #111827;
+  --header-bg: #ffffffb3;
+  --frame-bg: #f3f4f6;
+  --sentiment-bg: #ffffff;
+
+  --bg-skeleton-base: rgba(0, 0, 0, 0.08);
+  --bg-skeleton-highlight: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 0, 0, 0.05),
+    transparent
+  );
+  --bg-surface-1: #ffffff;
+  --bg-surface-2: #f3f4f6;
+  --bg-surface-3: #e5e7eb;
+
+  --tone-pos-bg: #10b981;
+  --tone-pos-border: #059669;
+  --tone-pos-text: #ffffff;
+
+  --tone-neg-bg: #ef4444;
+  --tone-neg-border: #dc2626;
+  --tone-neg-text: #ffffff;
+
+  --tone-neu-bg: #e5e7eb;
+  --tone-neu-border: #d1d5db;
+  --tone-neu-text: #111827;
+
+  --msg-error-bg: #fee2e2;
+  --msg-error-border: #ef4444;
+  --msg-error-text: #7f1d1d;
+
+  --msg-info-bg: #dbeafe;
+  --msg-info-border: #3b82f6;
+  --msg-info-text: #1e3a8a;
+
+  --bg-sentiment-card: #ffffff;
+  --border-sentiment-card: #e5e7eb;
+
+  /* Horizon selector (light mode) */
+  --selector-bg: #ffffff;
+  --selector-border: #d1d5db;
+  --selector-btn-active-bg: linear-gradient(135deg, #10b981, #14b8a6, #06b6d4);
+  --selector-btn-active-text: #ffffff;
+  --selector-btn-inactive-bg: #f3f4f6;
+  --selector-btn-inactive-hover-bg: #e5e7eb;
+  --selector-btn-inactive-text: #374151;
+
+  --surface-muted-bg: #ececec;
+}
+
+@theme {
+  --color-primary: var(--text-primary);
+  --color-header-bg: var(--header-bg);
+  --color-frame-bg: var(--frame-bg);
+  --color-sentiment-bg: var(--sentiment-bg);
+
+  --color-surface-1: var(--bg-surface-1);
+  --color-surface-2: var(--bg-surface-2);
+  --color-surface-3: var(--bg-surface-3);
+
+  --color-skeleton-base: var(--bg-skeleton-base);
+  --color-skeleton-highlight: var(--bg-skeleton-highlight);
+
+  --color-tone-pos-bg: var(--tone-pos-bg);
+  --color-tone-pos-border: var(--tone-pos-border);
+  --color-tone-pos-text: var(--tone-pos-text);
+
+  --color-tone-neg-bg: var(--tone-neg-bg);
+  --color-tone-neg-border: var(--tone-neg-border);
+  --color-tone-neg-text: var(--tone-neg-text);
+
+  --color-tone-neu-bg: var(--tone-neu-bg);
+  --color-tone-neu-border: var(--tone-neu-border);
+  --color-tone-neu-text: var(--tone-neu-text);
+
+  --color-msg-error-bg: var(--msg-error-bg);
+  --color-msg-error-border: var(--msg-error-border);
+  --color-msg-error-text: var(--msg-error-text);
+
+  --color-msg-info-bg: var(--msg-info-bg);
+  --color-msg-info-border: var(--msg-info-border);
+  --color-msg-info-text: var(--msg-info-text);
+
+  --color-sentiment-card-bg: var(--bg-sentiment-card);
+  --color-sentiment-card-border: var(--border-sentiment-card);
+
+  --color-selector-bg: var(--selector-bg);
+  --color-selector-border: var(--selector-border);
+  --color-selector-btn-active-bg: var(--selector-btn-active-bg);
+  --color-selector-btn-active-text: var(--selector-btn-active-text);
+  --color-selector-btn-inactive-bg: var(--selector-btn-inactive-bg);
+  --color-selector-btn-inactive-hover-bg: var(--selector-btn-inactive-hover-bg);
+  --color-selector-btn-inactive-text: var(--selector-btn-inactive-text);
+
+  --color-surface-muted-bg: var(--surface-muted-bg);
+}
+
 body {
-  background-color: #0a0a0a;
+  background-color: var(--app-bg-color);
+  color: var(--text-primary);
+  transition: all 0.2s ease-in-out;
 }
 
 .recharts-wrapper *:focus {
