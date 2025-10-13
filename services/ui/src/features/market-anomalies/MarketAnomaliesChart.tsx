@@ -54,14 +54,24 @@ function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
               year: "numeric",
             })
           }
-          tick={{ fontSize: 12, fill: "#a3a3a3", dy: 12 }}
+          tick={{
+            fontSize: 12,
+            fill: "var(--text-primary)",
+            opacity: 0.7,
+            dy: 12,
+          }}
           axisLine={{ stroke: "#333" }}
           tickLine
         />
 
         <YAxis
           tickFormatter={(val) => val.toFixed(1)}
-          tick={{ fontSize: 12, fill: "#a3a3a3", dx: -4 }}
+          tick={{
+            fontSize: 12,
+            fill: "var(--text-primary)",
+            opacity: 0.7,
+            dy: -4,
+          }}
           axisLine={{ stroke: "#333" }}
           tickLine
         />

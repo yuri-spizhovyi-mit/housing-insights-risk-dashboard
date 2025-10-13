@@ -31,7 +31,7 @@ function RiskGauge() {
         />
       )}
 
-      <Frame.Body className="min-h-64 h-full flex items-center">
+      <Frame.Body className="min-h-64 h-full flex items-center mb-4">
         {isFetching ? (
           <div className="flex gap-8 sm:gap-4 mb-9 flex-col sm:flex-row flex-wrap items-start sm:items-center w-full">
             <div className="flex-[0.5] flex items-center justify-center w-full">

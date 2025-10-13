@@ -15,13 +15,26 @@ const queryClient = new QueryClient({
   },
 });
 
-const theme = createTheme();
+const darkTheme = createTheme({
+  components: {
+    MuiSkeleton: {
+      styleOverrides: {
+        root: {
+          backgroundColor: "var(--bg-skeleton-base)",
+          "&::after": {
+            background: "var(--bg-skeleton-highlight)",
+          },
+        },
+      },
+    },
+  },
+});
 
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
     <ReactQueryDevtools initialIsOpen={false} />
 
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={darkTheme}>
       <FilterProvider>
         <StrictMode>
           <App />

@@ -36,7 +36,7 @@ function RiskGaugeChart({ riskScore }: RiskGaugeChartProps) {
             textAnchor="middle"
             dominantBaseline="middle"
             className="text-sm xl:text-lg font-semibold"
-            fill="#e7e1cc"
+            fill="var(--text-primary)"
           >
             {riskScore}%
           </text>
