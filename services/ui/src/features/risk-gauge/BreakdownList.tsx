@@ -10,7 +10,7 @@ export function BreakdownList({ breakdown }: BreakdownListProps) {
       {breakdown?.map((item) => (
         <div key={item.name} className="flex items-center justify-between py-4">
           <span className="opacity-80">{item.name}</span>
-          <span className="rounded-full px-2 py-0.5 text-xs bg-neutral-800 text-neutral-200">
+          <span className="rounded-full px-2 py-0.5 text-xs bg-surface-muted-bg text-primary">
             {item.status}
           </span>
         </div>

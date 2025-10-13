@@ -49,6 +49,8 @@
   --selector-btn-inactive-bg: #171717;
   --selector-btn-inactive-hover-bg: #262626;
   --selector-btn-inactive-text: #fafafa;
+
+  --surface-muted-bg: #262626;
 }
 
 .light {
@@ -100,6 +102,8 @@
   --selector-btn-inactive-bg: #f3f4f6;
   --selector-btn-inactive-hover-bg: #e5e7eb;
   --selector-btn-inactive-text: #374151;
+
+  --surface-muted-bg: #ececec;
 }
 
 @theme {
@@ -145,6 +149,8 @@
   --color-selector-btn-inactive-bg: var(--selector-btn-inactive-bg);
   --color-selector-btn-inactive-hover-bg: var(--selector-btn-inactive-hover-bg);
   --color-selector-btn-inactive-text: var(--selector-btn-inactive-text);
+
+  --color-surface-muted-bg: var(--surface-muted-bg);
 }
 
 body {
