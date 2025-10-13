@@ -6,7 +6,7 @@ interface FilterContainerProps {
 
 function FilterContainer({ children }: FilterContainerProps) {
   return (
-    <div className="flex gap-4 items-center w-full flex-wrap text-primary">
+    <div className="grid gap-4 w-full text-primary sm:grid-cols-2 md:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
       {children}
     </div>
   );

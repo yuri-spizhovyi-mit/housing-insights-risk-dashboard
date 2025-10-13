@@ -12,11 +12,11 @@ function FilterManager() {
     <section className="px-6 pt-6">
       <FilterContainer>
         <CitySelector />
-        <HorizonSelector />
         <PropertyTypeSelector />
-        <SqrtRangeSelector />
         <BedsSelector />
         <BathsSelector />
+        <SqrtRangeSelector />
+        <HorizonSelector />
         <PredictTrigger />
       </FilterContainer>
     </section>
