@@ -6,7 +6,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { ForecastPoint } from "../../../types/forecast.types";
+import type { ForecastPoint } from "../../../types/forecast";
 
 interface RentPriceForecastChartProps {
   data: ForecastPoint[] | undefined;

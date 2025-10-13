@@ -1,4 +1,4 @@
-import type { Indicator } from "../../types/risk.types";
+import type { Indicator } from "../../types/risk";
 
 type BreakdownListProps = {
   breakdown: Indicator[] | undefined;
