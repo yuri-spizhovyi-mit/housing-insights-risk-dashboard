@@ -8,21 +8,20 @@ interface MessageProps {
 
 function Message({ type, message, details }: MessageProps) {
   const isError = type === "error";
-  console.log(type);
 
   return (
     <div
-      className={`flex items-start gap-3 rounded-xl border p-4 text-sm shadow-md size-full ${
+      className={`flex items-start gap-3 rounded-xl border p-4 text-sm shadow-md size-full transition-colors duration-300 ${
         isError
-          ? "border-red-400/40 bg-red-900/30 text-red-200"
-          : "border-blue-400/30 bg-blue-900/20 text-blue-200"
+          ? "border-msg-error-border bg-msg-error-bg text-msg-error-text"
+          : "border-msg-info-border bg-msg-info-bg text-msg-info-text"
       }`}
     >
       <div className="flex-shrink-0">
         {isError ? (
-          <AlertTriangle className="h-5 w-5 text-red-400" />
+          <AlertTriangle className="h-5 w-5 text-msg-error-border" />
         ) : (
-          <Info className="h-5 w-5 text-blue-300" />
+          <Info className="h-5 w-5 text-msg-info-border" />
         )}
       </div>
       <div>

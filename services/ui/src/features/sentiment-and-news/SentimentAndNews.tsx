@@ -3,8 +3,8 @@ import { useFilters } from "../../context/FilterContext";
 import Frame from "../../ui/Frame";
 import Message from "../../ui/Message";
 import NewsItem from "./NewsItem";
-import SentimentAndNewsHeader from "./SentimentAndNewsHeader";
 import { useSentiments } from "./useSentiments";
+import { Newspaper } from "lucide-react";
 
 function SentimentAndNews() {
   const { city } = useFilters();
@@ -21,7 +21,10 @@ function SentimentAndNews() {
           className="mb-6"
         />
       ) : (
-        <SentimentAndNewsHeader />
+        <Frame.Header
+          leftIcon={<Newspaper className="size-4" />}
+          title="Sentiment & News"
+        />
       )}
 
       <div className="h-64">
@@ -38,7 +41,12 @@ function SentimentAndNews() {
                 {Array.from({ length: 3 }).map((_, i) => (
                   <li
                     key={i}
-                    className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/40"
+                    className="
+                    p-4 rounded-xl border
+                    border-sentiment-card-border
+                    bg-sentiment-card-bg
+                    transition-colors duration-300
+                  "
                   >
                     <Skeleton
                       variant="text"

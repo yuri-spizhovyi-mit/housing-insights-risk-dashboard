@@ -1,9 +1,10 @@
 import { LineChartIcon } from "lucide-react";
 import DownloadPdf from "./DownloadPdf";
+import ToggleButton from "./ToggleButton";
 
 function Header() {
   return (
-    <header className="text-neutral-50 flex flex-col items-start gap-5.5 md:flex-row md:items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-900/60 backdrop-blur">
+    <header className="flex flex-col md:flex-row items-start md:items-center justify-between px-6 py-4 gap-5.5 border-b border-neutral-800 bg-header-bg backdrop-blur text-primary transition-colors duration-500">
       <div className="flex items-center gap-3">
         <LineChartIcon className="size-6" />
         <h1 className="text-md sm:text-xl font-semibold tracking-tight">
@@ -11,7 +12,10 @@ function Header() {
         </h1>
       </div>
 
-      <DownloadPdf />
+      <div className="flex items-center gap-8">
+        <ToggleButton />
+        <DownloadPdf />
+      </div>
     </header>
   );
 }

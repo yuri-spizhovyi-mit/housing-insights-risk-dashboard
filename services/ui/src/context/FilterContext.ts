@@ -26,7 +26,7 @@ export type Action =
   | { type: "RESET" };
 
 export const initialState: State = {
-  city: "Vancouver",
+  city: "Kelowna",
   horizon: "1Y",
   propertyType: "House",
   beds: "Any",

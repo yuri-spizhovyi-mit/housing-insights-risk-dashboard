@@ -5,14 +5,32 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type DotProps,
 } from "recharts";
-import type { ForecastPoint } from "../../../types/forecast.types";
+import type { MarketAnomaly } from "../../types/market-anomalies.types";
 
-interface RentPriceForecastChartProps {
-  data: ForecastPoint[] | undefined;
+interface MarketAnomaliesChartProps {
+  data: MarketAnomaly[] | undefined;
 }
 
-function RentForecastChart({ data }: RentPriceForecastChartProps) {
+const CustomDot = (props: DotProps) => {
+  const { cx, cy, payload } = props as DotProps & { payload: MarketAnomaly };
+  if (payload?.is_anomaly) {
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={5}
+        fill="#ef4444"
+        stroke="#111"
+        strokeWidth={1.5}
+      />
+    );
+  }
+  return null;
+};
+
+function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart
@@ -21,24 +39,11 @@ function RentForecastChart({ data }: RentPriceForecastChartProps) {
       >
         <Line
           type="monotone"
-          dataKey="value"
-          stroke="#ffffffba"
+          dataKey="score"
+          stroke="#facc15"
           strokeWidth={2}
-          dot={false}
-        />
-        <Line
-          type="monotone"
-          dataKey="lower"
-          stroke="#a78bfa"
-          strokeDasharray="5 5"
-          dot={false}
-        />
-        <Line
-          type="monotone"
-          dataKey="upper"
-          stroke="#fbbf24"
-          strokeDasharray="5 5"
-          dot={false}
+          dot={<CustomDot />}
+          activeDot={{ r: 6 }}
         />
 
         <XAxis
@@ -55,34 +60,32 @@ function RentForecastChart({ data }: RentPriceForecastChartProps) {
             opacity: 0.7,
             dy: 12,
           }}
-          tickLine
           axisLine={{ stroke: "#333" }}
+          tickLine
         />
+
         <YAxis
-          tickFormatter={(val) => `$${val.toLocaleString()}`}
+          tickFormatter={(val) => val.toFixed(1)}
           tick={{
             fontSize: 12,
             fill: "var(--text-primary)",
             opacity: 0.7,
-            dx: -6,
+            dy: -4,
           }}
-          tickLine
           axisLine={{ stroke: "#333" }}
+          tickLine
         />
+
         <Tooltip
           contentStyle={{
             background: "#111",
             border: "1px solid #333",
-            fontSize: "15px",
+            fontSize: "14px",
           }}
           labelStyle={{ color: "#60a5fa" }}
-          formatter={(value: number, name: string) => [
-            `$${value.toLocaleString()}`,
-            name === "upper"
-              ? "Upper Price"
-              : name === "lower"
-              ? "Lower Price"
-              : "Price",
+          formatter={(value: number, _name: string, props: any) => [
+            value.toFixed(2),
+            props.payload.is_anomaly ? "Anomaly" : "Normal",
           ]}
           labelFormatter={(date) =>
             new Date(date).toLocaleDateString("en-US", {
@@ -96,4 +99,4 @@ function RentForecastChart({ data }: RentPriceForecastChartProps) {
   );
 }
 
-export default RentForecastChart;
+export default MarketAnomaliesChart;

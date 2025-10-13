@@ -9,7 +9,7 @@ function DownloadPdf() {
   return (
     <Button
       leftIcon={<Download className="size-4" />}
-      className="rounded-2xl border border-neutral-700 px-4 py-2 hover:bg-neutral-800 sm:text-lg text-sm"
+      className="rounded-2xl border border-neutral-700 px-4 py-2 hover:bg-surface-muted-bg sm:text-lg text-sm"
       onClick={() => downloadReport(city)}
     >
       Download PDF
