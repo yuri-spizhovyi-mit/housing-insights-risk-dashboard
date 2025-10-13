@@ -12,7 +12,7 @@ function Header() {
         </h1>
       </div>
 
-      <div className="flex flex-row-reverse gap-4 items-center sm:gap-8 sm:flex-row">
+      <div className="flex flex-row-reverse gap-4 items-center sm:gap-8 md:flex-row">
         <ToggleButton />
         <DownloadPdf />
       </div>
