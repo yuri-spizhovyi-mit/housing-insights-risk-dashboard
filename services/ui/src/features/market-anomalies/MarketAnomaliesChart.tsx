@@ -7,7 +7,7 @@ import {
   YAxis,
   type DotProps,
 } from "recharts";
-import type { MarketAnomaly } from "../../types/market-anomalies.types";
+import type { MarketAnomaly } from "../../types/market-anomalies";
 
 interface MarketAnomaliesChartProps {
   data: MarketAnomaly[] | undefined;

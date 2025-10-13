@@ -6,7 +6,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { ForecastPoint } from "../../../types/forecast.types";
+import type { ForecastPoint } from "../../../types/forecast";
 
 interface HomePriceForecastChartProps {
   data: ForecastPoint[] | undefined;
