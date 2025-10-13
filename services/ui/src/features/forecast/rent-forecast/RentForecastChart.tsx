@@ -49,13 +49,23 @@ function RentForecastChart({ data }: RentPriceForecastChartProps) {
               year: "numeric",
             })
           }
-          tick={{ fontSize: 12, fill: "#a3a3a3", dy: 12 }}
+          tick={{
+            fontSize: 12,
+            fill: "var(--text-primary)",
+            opacity: 0.7,
+            dy: 12,
+          }}
           tickLine
           axisLine={{ stroke: "#333" }}
         />
         <YAxis
           tickFormatter={(val) => `$${val.toLocaleString()}`}
-          tick={{ fontSize: 12, fill: "#a3a3a3", dx: -4 }}
+          tick={{
+            fontSize: 12,
+            fill: "var(--text-primary)",
+            opacity: 0.7,
+            dx: -6,
+          }}
           tickLine
           axisLine={{ stroke: "#333" }}
         />

@@ -41,7 +41,12 @@ function SentimentAndNews() {
                 {Array.from({ length: 3 }).map((_, i) => (
                   <li
                     key={i}
-                    className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/40"
+                    className="
+                    p-4 rounded-xl border
+                    border-sentiment-card-border
+                    bg-sentiment-card-bg
+                    transition-colors duration-300
+                  "
                   >
                     <Skeleton
                       variant="text"

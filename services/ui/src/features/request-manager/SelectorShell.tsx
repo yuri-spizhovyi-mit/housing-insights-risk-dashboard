@@ -15,7 +15,7 @@ function SelectorShell({
 }: SelectorShellProps) {
   return (
     <div
-      className={`${className} flex items-center gap-4 rounded-2xl border border-neutral-700 py-3`}
+      className={`${className} flex items-center gap-4 rounded-2xl border border-neutral-700 py-3 shadow-lg`}
     >
       {type && (
         <div className="flex items-center gap-2">
