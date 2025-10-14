@@ -5,12 +5,18 @@ import Message from "../../ui/Message";
 import Frame from "../../ui/Frame";
 import { useMarketAnomalies } from "./useMarketAnomalies";
 import MarketAnomaliesChart from "./MarketAnomaliesChart";
+import { useMemo } from "react";
 
 function MarketAnomalies() {
   const { city } = useFilters();
   const { marketAnomalies, error, isFetching } = useMarketAnomalies(
     city,
     "rent"
+  );
+
+  const memoizedData = useMemo(
+    () => marketAnomalies?.signals,
+    [marketAnomalies?.signals]
   );
 
   return (
@@ -46,7 +52,7 @@ function MarketAnomalies() {
             details={error.details}
           />
         ) : (
-          <MarketAnomaliesChart data={marketAnomalies?.signals} />
+          <MarketAnomaliesChart data={memoizedData} />
         )}
       </Frame.Body>
     </Frame>

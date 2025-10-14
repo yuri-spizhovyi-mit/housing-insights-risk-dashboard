@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { State } from "../../context/FilterContext";
-import type { Forecast } from "../../types/forecast.types";
+import type { Forecast } from "../../types/forecast";
 import type { ApiError } from "../../services/errors";
 import { getForecast } from "../../services/dashboard";
 

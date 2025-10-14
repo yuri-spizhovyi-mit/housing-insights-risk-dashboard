@@ -1,4 +1,4 @@
-import type { Sentiment, SentimentValue } from "../../types/sentiments.types";
+import type { Sentiment, SentimentValue } from "../../types/sentiments";
 
 const toneClasses = {
   POS: `

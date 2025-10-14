@@ -1,59 +1,6 @@
 @import "tailwindcss";
 
 :root {
-  --app-bg-color: #0a0a0a;
-  --text-primary: #fffbeb;
-  --header-bg: rgba(23, 23, 23, 0.6);
-  --frame-bg: #171717;
-  --sentiment-bg: #0a0a0a;
-
-  --bg-skeleton-base: rgba(255, 255, 255, 0.239);
-  --bg-skeleton-highlight: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.15),
-    transparent
-  );
-  --bg-surface-1: #1a1a1a;
-  --bg-surface-2: #121212;
-  --bg-surface-3: #0a0a0a;
-
-  --tone-pos-bg: transparent;
-  --tone-pos-border: #34d399;
-  --tone-pos-text: #6ee7b7;
-
-  --tone-neg-bg: transparent;
-  --tone-neg-border: #fb7185;
-  --tone-neg-text: #fda4af;
-
-  --tone-neu-bg: transparent;
-  --tone-neu-border: #525252;
-  --tone-neu-text: #d4d4d4;
-
-  --msg-error-bg: rgba(127, 29, 29, 0.35);
-  --msg-error-border: #f87171;
-  --msg-error-text: #fecaca;
-
-  --msg-info-bg: rgba(30, 58, 138, 0.25);
-  --msg-info-border: #60a5fa;
-  --msg-info-text: #bfdbfe;
-
-  --bg-sentiment-card: rgba(23, 23, 23, 0.8);
-  --border-sentiment-card: #262626;
-
-  /* Horizon selector (dark mode) */
-  --selector-bg: #0a0a0a;
-  --selector-border: #404040;
-  --selector-btn-active-bg: #e5e5e5;
-  --selector-btn-active-text: #111;
-  --selector-btn-inactive-bg: #171717;
-  --selector-btn-inactive-hover-bg: #262626;
-  --selector-btn-inactive-text: #fafafa;
-
-  --surface-muted-bg: #262626;
-}
-
-.light {
   --app-bg-color: #f9fafb;
   --text-primary: #111827;
   --header-bg: #ffffffb3;
@@ -104,6 +51,59 @@
   --selector-btn-inactive-text: #374151;
 
   --surface-muted-bg: #ececec;
+}
+
+.dark {
+  --app-bg-color: #0a0a0a;
+  --text-primary: #fffbeb;
+  --header-bg: rgba(23, 23, 23, 0.6);
+  --frame-bg: #171717;
+  --sentiment-bg: #0a0a0a;
+
+  --bg-skeleton-base: rgba(255, 255, 255, 0.239);
+  --bg-skeleton-highlight: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  --bg-surface-1: #1a1a1a;
+  --bg-surface-2: #121212;
+  --bg-surface-3: #0a0a0a;
+
+  --tone-pos-bg: transparent;
+  --tone-pos-border: #34d399;
+  --tone-pos-text: #6ee7b7;
+
+  --tone-neg-bg: transparent;
+  --tone-neg-border: #fb7185;
+  --tone-neg-text: #fda4af;
+
+  --tone-neu-bg: transparent;
+  --tone-neu-border: #525252;
+  --tone-neu-text: #d4d4d4;
+
+  --msg-error-bg: rgba(127, 29, 29, 0.35);
+  --msg-error-border: #f87171;
+  --msg-error-text: #fecaca;
+
+  --msg-info-bg: rgba(30, 58, 138, 0.25);
+  --msg-info-border: #60a5fa;
+  --msg-info-text: #bfdbfe;
+
+  --bg-sentiment-card: rgba(23, 23, 23, 0.8);
+  --border-sentiment-card: #262626;
+
+  /* Horizon selector (dark mode) */
+  --selector-bg: #0a0a0a;
+  --selector-border: #404040;
+  --selector-btn-active-bg: #e5e5e5;
+  --selector-btn-active-text: #111;
+  --selector-btn-inactive-bg: #171717;
+  --selector-btn-inactive-hover-bg: #262626;
+  --selector-btn-inactive-text: #fafafa;
+
+  --surface-muted-bg: #262626;
 }
 
 @theme {
@@ -157,6 +157,7 @@ body {
   background-color: var(--app-bg-color);
   color: var(--text-primary);
   transition: all 0.2s ease-in-out;
+  overflow-x: hidden;
 }
 
 .recharts-wrapper *:focus {

@@ -1,4 +1,4 @@
-import type { MarketAnomaliesSeries } from "../../types/market-anomalies.types";
+import type { MarketAnomaliesSeries } from "../../types/market-anomalies";
 import { getMarketAnomalies } from "../../services/dashboard";
 import type { ApiError } from "../../services/errors";
 import { useQuery } from "@tanstack/react-query";

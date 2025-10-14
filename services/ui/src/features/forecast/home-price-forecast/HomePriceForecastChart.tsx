@@ -6,7 +6,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { ForecastPoint } from "../../../types/forecast.types";
+import type { ForecastPoint } from "../../../types/forecast";
+import { memo } from "react";
 
 interface HomePriceForecastChartProps {
   data: ForecastPoint[] | undefined;
@@ -97,4 +98,4 @@ function HomePriceForecastChart({ data }: HomePriceForecastChartProps) {
   );
 }
 
-export default HomePriceForecastChart;
+export default memo(HomePriceForecastChart);

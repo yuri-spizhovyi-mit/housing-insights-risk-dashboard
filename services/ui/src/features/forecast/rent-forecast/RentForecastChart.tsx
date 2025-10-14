@@ -6,13 +6,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { ForecastPoint } from "../../../types/forecast.types";
+import type { ForecastPoint } from "../../../types/forecast";
+import { memo } from "react";
 
 interface RentPriceForecastChartProps {
   data: ForecastPoint[] | undefined;
 }
 
 function RentForecastChart({ data }: RentPriceForecastChartProps) {
+  console.log(data);
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart
@@ -96,4 +98,4 @@ function RentForecastChart({ data }: RentPriceForecastChartProps) {
   );
 }
 
-export default RentForecastChart;
+export default memo(RentForecastChart);

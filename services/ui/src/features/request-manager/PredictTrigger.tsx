@@ -26,7 +26,7 @@ function PredictTrigger() {
       onMouseLeave={() => setHovered(false)}
       leftIcon={<TrendingUp className="w-4 h-4" />}
       className={`
-        relative ml-4 px-6 py-2 rounded-xl
+        relative lg:ml-4 px-6 py-2 rounded-xl
         text-sm font-semibold
         overflow-hidden transition-all duration-300
         bg-[linear-gradient(135deg,#10b981,#14b8a6,#06b6d4)]
