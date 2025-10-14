@@ -5,10 +5,12 @@ import HomePriceForecastChart from "./HomePriceForecastChart";
 import { useForecast } from "../useForecast";
 import Skeleton from "@mui/material/Skeleton";
 import { Home } from "lucide-react";
+import { useMemo } from "react";
 
 function HomePriceForecast() {
   const filters = useFilters();
   const { forecast, error, isFetching } = useForecast(filters, "price");
+  const memoizedData = useMemo(() => forecast?.data, [forecast?.data]);
 
   return (
     <Frame className="col-span-12 lg:col-span-8 opacity-100 flex flex-col">
@@ -43,7 +45,7 @@ function HomePriceForecast() {
             details={error.details}
           />
         ) : (
-          <HomePriceForecastChart data={forecast?.data} />
+          <HomePriceForecastChart data={memoizedData} />
         )}
       </Frame.Body>
     </Frame>

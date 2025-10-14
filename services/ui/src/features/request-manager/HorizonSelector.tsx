@@ -7,27 +7,21 @@ function HorizonSelector() {
 
   return (
     <SelectorShell type="Horizon" className="px-4">
-      <div
-        className="flex rounded-xl overflow-hidden border w-[70%] ml-auto cursor-pointer"
-        style={{
-          borderColor: "var(--color-selector-border)",
-          backgroundColor: "var(--color-selector-bg)",
-        }}
-      >
+      <div className="flex rounded-xl overflow-hidden border w-[70%] ml-auto cursor-pointer border-selector-border bg-selector-bg">
         {horizons.map((h) => (
           <button
             key={h}
             onClick={() => dispatch({ type: "SET_HORIZON", payload: h })}
-            className="px-3 py-1.5 text-sm font-medium transition-all w-full"
+            className={`px-3 py-1.5 text-sm font-medium transition-all w-full  ${
+              horizon === h
+                ? "text-selector-btn-active-text"
+                : "text-selector-btn-inactive-text"
+            }`}
             style={{
               background:
                 horizon === h
                   ? "var(--color-selector-btn-active-bg)"
                   : "var(--color-selector-btn-inactive-bg)",
-              color:
-                horizon === h
-                  ? "var(--color-selector-btn-active-text)"
-                  : "var(--color-selector-btn-inactive-text)",
             }}
             onMouseEnter={(e) => {
               if (horizon !== h)

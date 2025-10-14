@@ -2,13 +2,15 @@ import Skeleton from "@mui/material/Skeleton";
 import { useFilters } from "../../context/FilterContext";
 import Frame from "../../ui/Frame";
 import Message from "../../ui/Message";
-import NewsItem from "./NewsItem";
 import { useSentiments } from "./useSentiments";
 import { Newspaper } from "lucide-react";
+import { useMemo } from "react";
+import NewsList from "./NewsList";
 
 function SentimentAndNews() {
   const { city } = useFilters();
   const { sentiments, error, isFetching } = useSentiments(city);
+  const memoizedData = useMemo(() => sentiments, [sentiments]);
 
   return (
     <Frame className="col-span-12 lg:col-span-4 text-amber-50">
@@ -72,11 +74,7 @@ function SentimentAndNews() {
                 ))}
               </ul>
             ) : (
-              <ul className="space-y-3">
-                {sentiments?.items.map((item, i) => (
-                  <NewsItem key={i} {...item} />
-                ))}
-              </ul>
+              <NewsList data={memoizedData} />
             )}
           </>
         )}

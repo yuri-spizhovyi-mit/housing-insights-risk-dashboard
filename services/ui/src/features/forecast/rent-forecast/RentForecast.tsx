@@ -6,10 +6,12 @@ import Skeleton from "@mui/material/Skeleton";
 import { useFilters } from "../../../context/FilterContext";
 import { useForecast } from "../useForecast";
 import { LineChartIcon } from "lucide-react";
+import { useMemo } from "react";
 
 function RentForecast() {
   const filters = useFilters();
   const { forecast, error, isFetching } = useForecast(filters, "rent");
+  const memoizedData = useMemo(() => forecast?.data, [forecast?.data]);
 
   return (
     <Frame className="col-span-12 lg:col-span-8 flex flex-col">
@@ -44,7 +46,7 @@ function RentForecast() {
             details={error.details}
           />
         ) : (
-          <RentForecastChart data={forecast?.data} />
+          <RentForecastChart data={memoizedData} />
         )}
       </Frame.Body>
     </Frame>
