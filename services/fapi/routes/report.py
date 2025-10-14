@@ -14,10 +14,10 @@ from reportlab.platypus import (
 )
 import matplotlib.pyplot as plt
 
-from services.fapi.db import get_db
-from services.fapi.models.model_predictions import ModelPrediction
-from services.fapi.models.risk_predictions import RiskPrediction
-from services.fapi.models.anomaly_signals import AnomalySignal
+from fapi.db import get_db
+from fapi.models.model_predictions import ModelPrediction
+from fapi.models.risk_predictions import RiskPrediction
+from fapi.models.anomaly_signals import AnomalySignal
 
 router = APIRouter(prefix="/report", tags=["report"])
 
