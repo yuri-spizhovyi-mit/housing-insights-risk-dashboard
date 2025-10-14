@@ -8,6 +8,7 @@ import {
   type DotProps,
 } from "recharts";
 import type { MarketAnomaly } from "../../types/market-anomalies";
+import { memo } from "react";
 
 interface MarketAnomaliesChartProps {
   data: MarketAnomaly[] | undefined;
@@ -99,4 +100,4 @@ function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
   );
 }
 
-export default MarketAnomaliesChart;
+export default memo(MarketAnomaliesChart);

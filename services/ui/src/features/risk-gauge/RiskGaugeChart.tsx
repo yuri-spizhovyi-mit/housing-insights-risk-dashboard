@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
 interface RiskGaugeChartProps {
@@ -46,4 +47,4 @@ function RiskGaugeChart({ riskScore }: RiskGaugeChartProps) {
   );
 }
 
-export default RiskGaugeChart;
+export default memo(RiskGaugeChart);
