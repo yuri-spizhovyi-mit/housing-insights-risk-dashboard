@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+psycopg2-binary
+python-dotenv
+sqlalchemy
+reportlab
+feedparser==6.0.11
+vaderSentiment==3.3.2
