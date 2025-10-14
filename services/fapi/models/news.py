@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Date, Text, Numeric
-from services.fapi.db import Base
+from fapi.db import Base
 
 
 class NewsArticle(Base):
