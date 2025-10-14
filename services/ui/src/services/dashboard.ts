@@ -1,9 +1,9 @@
-import type { CitySentiments } from "../types/sentiments.types";
+import type { CitySentiments } from "../types/sentiments";
 import type { FilterContextType } from "../context/FilterContext";
 import { ApiError } from "./errors";
 
-import type { MarketAnomaliesSeries } from "../types/market-anomalies.types";
-import type { CityInsight } from "../types/risk.types";
+import type { MarketAnomaliesSeries } from "../types/market-anomalies";
+import type { CityInsight } from "../types/risk";
 
 export async function getCities(): Promise<string[]> {
   const res = await fetch(
