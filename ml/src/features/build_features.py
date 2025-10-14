@@ -40,9 +40,9 @@ def load_hpi(engine) -> pd.DataFrame:
 def merge_features(dfs: list[pd.DataFrame]) -> pd.DataFrame:
     """Outer join all dataframes on city + date."""
     from functools import reduce
+
     return reduce(
-        lambda left, right: pd.merge(left, right, on=["city", "date"], how="outer"),
-        dfs
+        lambda left, right: pd.merge(left, right, on=["city", "date"], how="outer"), dfs
     )
 
 
@@ -60,7 +60,9 @@ def build_macro_features(engine) -> pd.DataFrame:
 
     # --- 2. Merge ---
     print("[DEBUG] Merging macro datasets...")
-    df_merged = merge_features([hpi_df, cpi_df, gdp_df, unemp_df, prime_df, mortgage_df])
+    df_merged = merge_features(
+        [hpi_df, cpi_df, gdp_df, unemp_df, prime_df, mortgage_df]
+    )
 
     # --- 3. Clean ---
     print("[DEBUG] Cleaning merged dataframe...")
@@ -74,8 +76,12 @@ def build_macro_features(engine) -> pd.DataFrame:
 
     # --- 4. Add derived columns ---
     print("[DEBUG] Adding derived features...")
-    df_merged["hpi_mom_pct"] = df_merged.groupby("city")["hpi_composite_sa"].pct_change() * 100
-    df_merged["cpi_yoy_pct"] = df_merged.groupby("city")["StatCan_CPI_AllItems"].pct_change(12) * 100
+    df_merged["hpi_mom_pct"] = (
+        df_merged.groupby("city")["hpi_composite_sa"].pct_change() * 100
+    )
+    df_merged["cpi_yoy_pct"] = (
+        df_merged.groupby("city")["StatCan_CPI_AllItems"].pct_change(12) * 100
+    )
 
     df_merged["features_version"] = "macro_v1.0"
     df_merged["created_at"] = datetime.utcnow()
@@ -99,5 +105,6 @@ def run(ctx):
 
 if __name__ == "__main__":
     from ml.src.utils.context import default_context
+
     ctx = default_context()
     run(ctx)

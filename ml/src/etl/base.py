@@ -112,7 +112,11 @@ def put_raw_bytes(
 
 
 def write_df(
-    df: pd.DataFrame, table: str, ctx: Context, if_exists: str = "append"
+    df: pd.DataFrame,
+    table: str,
+    ctx: Context,
+    if_exists: str = "append",
+    **kwargs,
 ) -> int:
     if df is None or df.empty:
         print(f"[DEBUG] Skipping write: {table} DataFrame empty.")
@@ -130,7 +134,9 @@ def write_df(
             schema="public",
             if_exists=if_exists,
             index=False,
-            method="multi",
+            method=kwargs.pop("method", "multi"),
+            chunksize=kwargs.pop("chunksize", 500),
+            **kwargs,
         )
         conn.commit()  # ✅ Explicit commit to persist data
 
