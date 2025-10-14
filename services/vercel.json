@@ -1,17 +1,18 @@
 {
     "builds": [
         {
-            "src": "main.py",
+            "src": "fapi/main.py",
             "use": "@vercel/python",
             "config": {
-                "runtime": "python3.12"
+                "runtime": "python3.12",
+                "installCommand": "pip install -r fapi/requirements.txt"
             }
         }
     ],
     "routes": [
         {
             "src": "/(.*)",
-            "dest": "main.py"
+            "dest": "fapi/main.py"
         }
     ]
 }
