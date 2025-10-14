@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from services.fapi.db import get_db
-from services.fapi.models.risk_predictions import RiskPrediction
+from fapi.db import get_db
+from fapi.models.risk_predictions import RiskPrediction
 
 router = APIRouter(prefix="/risk", tags=["risk"])
 
