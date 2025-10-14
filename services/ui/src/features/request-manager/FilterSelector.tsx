@@ -71,7 +71,7 @@ function FilterSelector({
       className="bg-transparent focus:outline-none px-1 text-sm sm:text-sm w-full flex-1"
     >
       {data.map((val) => (
-        <option key={val} value={val} className="bg-neutral-900">
+        <option key={val} value={val}>
           {val}
         </option>
       ))}
