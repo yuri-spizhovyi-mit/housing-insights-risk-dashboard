@@ -12,49 +12,6 @@ import pandas as pd
 from sqlalchemy import text
 from datetime import datetime
 from ml.src.etl import base
-import pandas as pd
-from sqlalchemy import create_engine, text
-
-# 1. Load house_price_index and metrics
-hpi = pd.read_sql("SELECT * FROM public.house_price_index;", engine)
-metrics = pd.read_sql("SELECT * FROM public.metrics;", engine)
-
-# 2. Normalize property_type labels if still using 'measure'
-rename_map = {
-    "Composite_Benchmark_SA": "Composite",
-    "Single_Family_Benchmark_SA": "House",
-    "Apartment_Benchmark_SA": "Condo",
-    "Townhouse_Benchmark_SA": "Townhouse"
-}
-if "measure" in hpi.columns:
-    hpi["property_type"] = hpi["measure"].map(rename_map)
-    hpi = hpi.drop(columns=["measure"])
-
-# 3. Pivot HPI so property types become columns
-hpi_pivot = (
-    hpi.pivot_table(index=["city", "date"],
-                    columns="property_type",
-                    values="index_value")
-    .reset_index()
-    .rename_axis(None, axis=1)
-)
-# Rename columns clearly
-hpi_pivot.columns = [
-    "city", "date",
-    "hpi_composite", "hpi_condo", "hpi_house", "hpi_townhouse"
-]
-
-# 4. Merge HPI with macro metrics (example)
-features = (
-    metrics.merge(hpi_pivot, on=["city", "date"], how="left")
-)
-
-# 5. Save to DB
-engine.execute("DROP TABLE IF EXISTS public.features;")
-features.to_sql("features", engine, schema="public", index=False)
-
-print(f"[INFO] Saved {len(features)} feature rows to public.features")
-
 
 
 def load_metric(engine, metric: str) -> pd.DataFrame:
