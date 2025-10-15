@@ -7,7 +7,7 @@ function HorizonSelector() {
 
   return (
     <SelectorShell type="Horizon" className="px-4">
-      <div className="flex rounded-xl overflow-hidden border w-[70%] ml-auto cursor-pointer border-selector-border bg-selector-bg">
+      <div className="flex rounded-xl overflow-hidden border w-[70%] sm:w-full ml-auto cursor-pointer border-selector-border bg-selector-bg">
         {horizons.map((h) => (
           <button
             key={h}

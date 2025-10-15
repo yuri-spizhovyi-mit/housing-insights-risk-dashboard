@@ -5,45 +5,68 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  type DotProps,
 } from "recharts";
-import type { MarketAnomaly } from "../../types/market-anomalies";
+import type { MarketAnomaliesSeries } from "../../types/market-anomalies";
 import { memo } from "react";
 
 interface MarketAnomaliesChartProps {
-  data: MarketAnomaly[] | undefined;
+  data: MarketAnomaliesSeries[] | undefined;
 }
 
-const CustomDot = (props: DotProps) => {
-  const { cx, cy, payload } = props as DotProps & { payload: MarketAnomaly };
-  if (payload?.is_anomaly) {
-    return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={5}
-        fill="#ef4444"
-        stroke="#111"
-        strokeWidth={1.5}
-      />
-    );
+function transformData(data: MarketAnomaliesSeries[] | undefined) {
+  // Time: O((m * s) + d log d), Space: O(map + sorted)
+  if (!data) return [];
+
+  const map = new Map<string, any>();
+
+  for (const series of data) {
+    const key = series.target;
+
+    for (const point of series.signals) {
+      if (!map.has(point.date)) {
+        map.set(point.date, {
+          date: point.date,
+          [key]: point.score,
+          isRentAnomaly: series.target === "rent" && point.is_anomaly,
+          isHomeAnomaly: series.target === "price" && point.is_anomaly,
+        });
+      } else {
+        const entry = map.get(point.date)!;
+        entry[key] = point.score;
+        entry.isRentAnomaly ||= series.target === "rent" && point.is_anomaly;
+        entry.isHomeAnomaly ||= series.target === "price" && point.is_anomaly;
+      }
+    }
   }
-  return null;
-};
+
+  return [...map.values()].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+}
 
 function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
+  const transformedData = transformData(data);
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart
-        data={data}
-        margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-      >
+      <LineChart data={transformedData}>
         <Line
           type="monotone"
-          dataKey="score"
-          stroke="#facc15"
+          dataKey="rent"
+          stroke="#fbbf24"
           strokeWidth={2}
-          dot={<CustomDot />}
+          connectNulls={true}
+          dot={{ r: 4 }}
+          activeDot={{ r: 6 }}
+        />
+
+        <Line
+          type="monotone"
+          dataKey="price"
+          stroke="#10b981"
+          strokeWidth={2}
+          connectNulls={true}
+          dot={{ r: 4 }}
           activeDot={{ r: 6 }}
         />
 
@@ -64,7 +87,6 @@ function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
           axisLine={{ stroke: "#333" }}
           tickLine
         />
-
         <YAxis
           tickFormatter={(val) => val.toFixed(1)}
           tick={{
@@ -76,17 +98,22 @@ function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
           axisLine={{ stroke: "#333" }}
           tickLine
         />
-
         <Tooltip
           contentStyle={{
             background: "#111",
             border: "1px solid #333",
             fontSize: "14px",
           }}
-          labelStyle={{ color: "#60a5fa" }}
-          formatter={(value: number, _name: string, props: any) => [
+          labelStyle={{ color: "#ffffff" }}
+          formatter={(value: number, name: string, props: any) => [
             value.toFixed(2),
-            props.payload.is_anomaly ? "Anomaly" : "Normal",
+            name === "rent"
+              ? props.payload.isRentAnomaly
+                ? "Rent • Anomaly"
+                : "Rent"
+              : props.payload.isHomeAnomaly
+              ? "Home • Anomaly"
+              : "Home",
           ]}
           labelFormatter={(date) =>
             new Date(date).toLocaleDateString("en-US", {

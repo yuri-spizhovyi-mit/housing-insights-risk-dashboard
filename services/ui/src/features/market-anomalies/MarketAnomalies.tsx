@@ -9,15 +9,9 @@ import { useMemo } from "react";
 
 function MarketAnomalies() {
   const { city } = useFilters();
-  const { marketAnomalies, error, isFetching } = useMarketAnomalies(
-    city,
-    "rent"
-  );
+  const { marketAnomalies, error, isFetching } = useMarketAnomalies(city);
 
-  const memoizedData = useMemo(
-    () => marketAnomalies?.signals,
-    [marketAnomalies?.signals]
-  );
+  const memoizedData = useMemo(() => marketAnomalies, [marketAnomalies]);
 
   return (
     <Frame className="col-span-12 lg:col-span-8 opacity-100 flex flex-col">
