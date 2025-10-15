@@ -1,11 +1,11 @@
-export type MarketAnomaliesSeries = {
-  city: string;
-  target: string;
-  signals: MarketAnomaly[];
-};
-
 export type MarketAnomaly = {
   date: string;
-  anomaly: number;
+  score: number;
   is_anomaly: boolean;
+};
+
+export type MarketAnomaliesSeries = {
+  city: string;
+  target: "price" | "rent";
+  signals: MarketAnomaly[];
 };

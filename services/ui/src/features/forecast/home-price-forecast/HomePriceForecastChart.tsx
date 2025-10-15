@@ -23,22 +23,21 @@ function HomePriceForecastChart({ data }: HomePriceForecastChartProps) {
         <Line
           type="monotone"
           dataKey="value"
-          stroke="#60a5fa"
+          stroke="#3b82f6"
           strokeWidth={2}
           dot={false}
         />
         <Line
           type="monotone"
           dataKey="upper"
-          stroke="#34d399"
+          stroke="#22c55e"
           strokeDasharray="5 5"
           dot={false}
         />
-
         <Line
           type="monotone"
           dataKey="lower"
-          stroke="#f87171"
+          stroke="#ef4444"
           strokeDasharray="5 5"
           dot={false}
         />
@@ -77,7 +76,7 @@ function HomePriceForecastChart({ data }: HomePriceForecastChartProps) {
             border: "1px solid #333",
             fontSize: "15px",
           }}
-          labelStyle={{ color: "#60a5fa" }}
+          labelStyle={{ color: "#ffffff" }}
           formatter={(value: number, name: string) => [
             `$${value.toLocaleString()}`,
             name === "upper"
