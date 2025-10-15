@@ -104,30 +104,51 @@ export async function getRiskGauge(city: string): Promise<CityInsight> {
 }
 
 export async function getMarketAnomalies(
-  city: string,
-  target: string
-): Promise<MarketAnomaliesSeries> {
-  const res = await fetch(
-    `https://housing-insights-risk-dashboard.vercel.app/anomalies?city=${city}&target=${target}`
-  );
+  city: string
+): Promise<MarketAnomaliesSeries[]> {
+  try {
+    const res = await Promise.all([
+      fetch(
+        `https://housing-insights-risk-dashboard.vercel.app/anomalies?city=${city}&target=rent`
+      ),
+      fetch(
+        `https://housing-insights-risk-dashboard.vercel.app/anomalies?city=${city}&target=price`
+      ),
+    ]);
 
-  if (res.status === 404) {
-    throw new ApiError(
-      "empty",
-      `No market anomaly data found for ${city}.`,
-      `We don't have anomaly insights for this city yet — our models are still training. 
-       Please check back soon or try selecting another location.`
+    if (res.some((r) => r.status === 404)) {
+      throw new ApiError(
+        "empty",
+        `No market anomaly data found for ${city}.`,
+        `We don't have anomaly insights for this city yet — our models are still training. 
+        Please check back soon or try selecting another location.`
+      );
+    }
+
+    if (!res.some((r) => r.ok)) {
+      throw new ApiError(
+        "error",
+        "Something went wrong",
+        "Server is unavailable, please try again later."
+      );
+    }
+
+    const data: MarketAnomaliesSeries[] = await Promise.all(
+      res.map((r) => r.json() as Promise<MarketAnomaliesSeries>)
     );
-  }
 
-  if (!res.ok) {
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
     throw new ApiError(
       "error",
-      "Something went wrong",
-      "Server is unavailable, please try again later."
+      "Network failure",
+      `Unable to fetch anomaly data for ${city}. Please check your internet connection or try again later.\n${String(
+        error
+      )}`
     );
   }
-
-  const data = await res.json();
-  return data;
 }

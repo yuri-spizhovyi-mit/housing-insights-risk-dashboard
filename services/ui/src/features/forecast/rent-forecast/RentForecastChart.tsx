@@ -23,15 +23,14 @@ function RentForecastChart({ data }: RentPriceForecastChartProps) {
       >
         <Line
           type="monotone"
-          dataKey="value"
-          stroke="#ffffffba"
+          dataKey="value" // Indigo 500 – main forecast (rent)
           strokeWidth={2}
           dot={false}
         />
         <Line
           type="monotone"
           dataKey="lower"
-          stroke="#a78bfa"
+          stroke="#f87171"
           strokeDasharray="5 5"
           dot={false}
         />
@@ -77,7 +76,7 @@ function RentForecastChart({ data }: RentPriceForecastChartProps) {
             border: "1px solid #333",
             fontSize: "15px",
           }}
-          labelStyle={{ color: "#60a5fa" }}
+          labelStyle={{ color: "#ffffff" }}
           formatter={(value: number, name: string) => [
             `$${value.toLocaleString()}`,
             name === "upper"
