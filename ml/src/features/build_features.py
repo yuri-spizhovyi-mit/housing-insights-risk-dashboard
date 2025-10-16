@@ -24,7 +24,7 @@ rename_map = {
     "Composite_Benchmark_SA": "Composite",
     "Single_Family_Benchmark_SA": "House",
     "Apartment_Benchmark_SA": "Condo",
-    "Townhouse_Benchmark_SA": "Townhouse"
+    "Townhouse_Benchmark_SA": "Townhouse",
 }
 if "measure" in hpi.columns:
     hpi["property_type"] = hpi["measure"].map(rename_map)
@@ -32,29 +32,30 @@ if "measure" in hpi.columns:
 
 # 3. Pivot HPI so property types become columns
 hpi_pivot = (
-    hpi.pivot_table(index=["city", "date"],
-                    columns="property_type",
-                    values="index_value")
+    hpi.pivot_table(
+        index=["city", "date"], columns="property_type", values="index_value"
+    )
     .reset_index()
     .rename_axis(None, axis=1)
 )
 # Rename columns clearly
 hpi_pivot.columns = [
-    "city", "date",
-    "hpi_composite", "hpi_condo", "hpi_house", "hpi_townhouse"
+    "city",
+    "date",
+    "hpi_composite",
+    "hpi_condo",
+    "hpi_house",
+    "hpi_townhouse",
 ]
 
 # 4. Merge HPI with macro metrics (example)
-features = (
-    metrics.merge(hpi_pivot, on=["city", "date"], how="left")
-)
+features = metrics.merge(hpi_pivot, on=["city", "date"], how="left")
 
 # 5. Save to DB
 engine.execute("DROP TABLE IF EXISTS public.features;")
 features.to_sql("features", engine, schema="public", index=False)
 
 print(f"[INFO] Saved {len(features)} feature rows to public.features")
-
 
 
 def load_metric(engine, metric: str) -> pd.DataFrame:
