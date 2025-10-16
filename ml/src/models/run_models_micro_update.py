@@ -168,7 +168,7 @@ def _scale_forecasts(ctx, target: str, horizon: int, ratios: pd.DataFrame):
 def run_micro_forecast(ctx, target: str = "rent_index"):
     """Run micro forecast updates for multiple horizons (3,6,12,24 months)."""
     engine = get_engine()
-    horizons = [3, 6, 12, 24]
+    horizons = [12, 24, 60, 120]
 
     print(f"\n🚀 Starting micro forecast pipeline for target={target}")
     ratios = _compute_rent_ratios(engine, lookback_months=6)
