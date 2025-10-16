@@ -1,26 +1,34 @@
 """
-Micro-forecast updater
-----------------------
-Scales macro forecasts from model_predictions down to (beds,baths,property_type)
-using ratios computed from recent listings_raw data.
+run_models_micro_update.py
+--------------------------
+Scales macro forecasts from model_predictions into
+property-level (beds/baths/property_type) micro forecasts.
+
+Reads:
+  - public.listings_raw         → to compute rent ratios
+  - public.model_predictions    → city-level forecasts
+
+Writes:
+  - public.model_predictions    (with micro columns filled)
 """
 
 import pandas as pd
 from sqlalchemy import text
-from datetime import datetime, timedelta
-
+from datetime import datetime
 from ml.src.utils.data_loader import get_engine
 from ml.src.utils.db_writer import write_forecasts
 
 
+# -----------------------------------------------------------------------------
+# 1. Compute rent ratios from listings_raw
+# -----------------------------------------------------------------------------
 def _compute_rent_ratios(engine, lookback_months: int = 6) -> pd.DataFrame:
     """
     Compute median rent ratios per (city,beds,baths,property_type)
-    over the last N months relative to city median.
-    Returns tidy DataFrame with columns:
-      city, beds, baths, property_type, rent_ratio
+    relative to the citywide median over last N months.
+    Returns tidy DataFrame: city, beds, baths, property_type, rent_ratio.
     """
-    print(f"[INFO] Computing rent ratios from listings_raw (lookback={lookback_months}m)...")
+    print(f"\n[INFO] 🔍 Computing rent ratios from listings_raw (lookback={lookback_months}m)...")
     with engine.connect() as conn:
         df = pd.read_sql(
             """
@@ -40,15 +48,15 @@ def _compute_rent_ratios(engine, lookback_months: int = 6) -> pd.DataFrame:
         )
 
     if df.empty:
-        print("[WARN] No listings_raw data found for ratio computation.")
+        print("[WARN] ⚠️ No listings_raw data found for ratio computation.")
         return pd.DataFrame()
 
-    # clean
+    # Clean and filter
     df = df.dropna(subset=["price", "beds", "baths", "city", "property_type"])
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     df = df[df["price"] > 100]
 
-    # median rents
+    # Median rents
     med_city = df.groupby(["city", "month"])["price"].median().rename("city_median")
     med_cfg = (
         df.groupby(["city", "month", "beds", "baths", "property_type"])["price"]
@@ -60,7 +68,6 @@ def _compute_rent_ratios(engine, lookback_months: int = 6) -> pd.DataFrame:
     )
     merged["ratio"] = merged["cfg_median"] / merged["city_median"]
 
-    # average ratio across months
     ratios = (
         merged.groupby(["city", "beds", "baths", "property_type"])["ratio"]
         .median()
@@ -68,28 +75,22 @@ def _compute_rent_ratios(engine, lookback_months: int = 6) -> pd.DataFrame:
         .rename(columns={"ratio": "rent_ratio"})
     )
 
-    print(f"[DEBUG] Computed {len(ratios)} rent ratio rows.")
+    print(f"[INFO] ✅ Computed {len(ratios)} rent ratio rows.")
     return ratios
 
 
-def run_micro_forecast(ctx, target: str = "rent_index", horizon: int = 12):
-    """
-    1. Load city-level forecasts from model_predictions for the given target/horizon.
-    2. Compute rent ratios from recent listings.
-    3. Multiply city forecasts by ratios to produce property-level forecasts.
-    4. Write results into public.model_predictions (same schema).
-    """
+# -----------------------------------------------------------------------------
+# 2. Generate and write micro forecasts
+# -----------------------------------------------------------------------------
+def _scale_forecasts(ctx, target: str, horizon: int, ratios: pd.DataFrame):
     engine = get_engine()
-    ratios = _compute_rent_ratios(engine, lookback_months=6)
-    if ratios.empty:
-        print("[WARN] Skipping micro forecast: no ratios available.")
-        return
 
     with engine.connect() as conn:
         macro_df = pd.read_sql(
             text("""
                 SELECT city, target, horizon_months, predict_date,
-                       yhat, yhat_lower, yhat_upper, model_name, features_version
+                       yhat, yhat_lower, yhat_upper,
+                       model_name, features_version
                 FROM public.model_predictions
                 WHERE target = :target
                   AND horizon_months = :horizon
@@ -102,18 +103,21 @@ def run_micro_forecast(ctx, target: str = "rent_index", horizon: int = 12):
         )
 
     if macro_df.empty:
-        print(f"[WARN] No macro forecasts found for {target} horizon={horizon}.")
+        print(f"[WARN] ⚠️ No macro forecasts found for {target} horizon={horizon}. Skipping.")
         return
 
-    print(f"[INFO] Scaling {len(macro_df)} macro forecast rows into micro forecasts...")
+    print(f"[INFO] Scaling {len(macro_df)} macro rows → micro forecasts (horizon={horizon})...")
 
-    # cross join ratios
     joined = macro_df.merge(ratios, on="city", how="inner")
+    if joined.empty:
+        print(f"[WARN] No matching city data for horizon={horizon}.")
+        return
+
     joined["yhat"] = joined["yhat"] * joined["rent_ratio"]
     joined["yhat_lower"] = joined["yhat_lower"] * joined["rent_ratio"]
     joined["yhat_upper"] = joined["yhat_upper"] * joined["rent_ratio"]
 
-    # select / rename for DB writer
+    # Prepare for DB write
     out_cols = [
         "model_name", "target", "horizon_months", "city",
         "property_type", "beds", "baths",
@@ -122,13 +126,40 @@ def run_micro_forecast(ctx, target: str = "rent_index", horizon: int = 12):
     df_out = joined[out_cols].copy()
     df_out["created_at"] = datetime.utcnow()
 
-    print(f"[INFO] Writing {len(df_out)} micro forecast rows to public.model_predictions...")
+    print(f"[INFO] 💾 Writing {len(df_out)} micro forecast rows...")
     write_forecasts(df_out, ctx)
-    print("[INFO] ✅ Micro forecasts successfully written.")
+    print(f"[INFO] ✅ Completed horizon={horizon} ({target})")
 
 
+# -----------------------------------------------------------------------------
+# 3. Orchestrator (loop over horizons)
+# -----------------------------------------------------------------------------
+def run_micro_forecast(ctx, target: str = "rent_index"):
+    """
+    Run micro forecast updates for multiple horizons (e.g. 3,6,12,24 months)
+    for the specified target.
+    """
+    engine = get_engine()
+    horizons = [3, 6, 12, 24]
+
+    print(f"\n🚀 Starting micro forecast pipeline for target={target}")
+    ratios = _compute_rent_ratios(engine, lookback_months=6)
+    if ratios.empty:
+        print("[WARN] Aborting micro forecast: no rent ratios available.")
+        return
+
+    for horizon in horizons:
+        _scale_forecasts(ctx, target, horizon, ratios)
+
+    print(f"\n🏁 All horizons processed successfully for target={target}")
+
+
+# -----------------------------------------------------------------------------
+# 4. CLI entrypoint
+# -----------------------------------------------------------------------------
 if __name__ == "__main__":
     from datetime import date
     from ml.src.etl import base
+
     ctx = base.Context(run_date=date.today())
-    run_micro_forecast(ctx, target="rent_index", horizon=12)
+    run_micro_forecast(ctx, target="rent_index")
