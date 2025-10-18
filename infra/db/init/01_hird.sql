@@ -82,7 +82,8 @@ CREATE TABLE IF NOT EXISTS public.model_predictions (
   yhat_upper          NUMERIC(14,4),
   features_version    TEXT,
   model_artifact_uri  TEXT,
-  created_at          TIMESTAMPTZ DEFAULT now()
+  created_at          TIMESTAMPTZ DEFAULT now(),
+  is_micro            BOOLEAN
 );
 
 CREATE INDEX IF NOT EXISTS idx_model_predictions_city_horizon_date

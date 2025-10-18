@@ -118,9 +118,9 @@ See the [docs](./docs) folder for:
 
 | Phase | Period | Focus |
 |--------|---------|--------|
-| **I. MVP Implementation** | Sept – Nov 2025 | ETL pipelines, Prophet/ARIMA forecasting, database integration |
-| **II. System Integration** | Dec 2025 – Feb 2026 | API Gateway, LightGBM training, UI enhancements |
-| **III. Risk Modeling (optional)** | Mar – Apr 2026 | Crisis-similarity classifier and composite risk index |
+| **I. MVP Implementation (Completed)** | Sept – Oct 2025 | ETL pipelines, Prophet/ARIMA forecasting, and database integration |
+| **II. System Integration (In Progress)** | Oct – Dec 2025 | LightGBM model training, API Gateway (Spring Boot), and UI enhancements |
+| **III. Risk Modeling (Next Phase)** | Dec 2025 – Feb 2026 | Crisis-similarity classifier and composite housing risk index |
 
 📈 For detailed milestones, see the [Project Roadmap](https://github.com/users/yuri-spizhovyi-mit/projects/2/views/4).
 
