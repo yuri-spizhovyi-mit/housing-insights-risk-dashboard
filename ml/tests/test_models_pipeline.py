@@ -1,39 +1,71 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Unit tests for core forecasting pipeline (Prophet/ARIMA)
+Unit tests for forecasting models: Prophet and ARIMA.
 """
 
 import unittest
 import pandas as pd
-
-from ml.src.models.forecast_prophet import forecast_prophet
-from ml.src.models.forecast_arima import forecast_arima
+from ml.src.models.forecasting.prophet_model import run_prophet
+from ml.src.models.forecasting.arima_model import run_arima
 
 
 def sample_series():
-    """Generate simple monthly data with trend"""
-    dates = pd.date_range("2020-01-01", periods=24, freq="M")
-    values = [100 + i * 2 for i in range(24)]  # upward trend
+    """Generate synthetic monthly time series."""
+    dates = pd.date_range("2022-01-01", periods=24, freq="M")
+    values = [1200 + i * 15 for i in range(24)]  # mild upward trend
     return pd.DataFrame({"date": dates, "value": values})
 
 
 class TestForecastModels(unittest.TestCase):
-    """Test suite for Prophet and ARIMA forecasts"""
+    """Tests for Prophet and ARIMA forecast outputs."""
 
-    def test_prophet_forecast_length(self):
+    def test_prophet_returns_list_of_dicts(self):
         df = sample_series()
-        result = forecast_prophet(df, horizon=12)
-        # Check we got 12 forecast points
-        self.assertEqual(len(result), 12)
-        # Ensure expected keys exist
-        self.assertTrue(all(k in result.columns for k in ["date", "value", "lower", "upper"]))
+        forecasts = run_prophet(df, city="Kelowna", target="rent_index")
 
-    def test_arima_forecast_length(self):
+        # Verify type
+        self.assertIsInstance(forecasts, list)
+        self.assertGreater(len(forecasts), 0)
+        self.assertIsInstance(forecasts[0], dict)
+
+        # Check key structure
+        expected_keys = {
+            "model_name", "target", "horizon_months",
+            "city", "predict_date", "yhat",
+            "yhat_lower", "yhat_upper",
+            "features_version", "model_artifact_uri",
+        }
+        self.assertTrue(expected_keys.issubset(forecasts[0].keys()))
+
+        # Logical checks
+        self.assertEqual(forecasts[0]["model_name"], "prophet")
+        self.assertEqual(forecasts[0]["city"], "Kelowna")
+        self.assertEqual(len(forecasts), 12)  # 12-month horizon
+        self.assertIsInstance(forecasts[0]["yhat"], float)
+
+    def test_arima_returns_list_of_dicts(self):
         df = sample_series()
-        result = forecast_arima(df, horizon=12)
-        self.assertEqual(len(result), 12)
-        self.assertTrue("value" in result.columns)
+        forecasts = run_arima(df, city="Kelowna", target="rent_index")
+
+        # Verify type and structure
+        self.assertIsInstance(forecasts, list)
+        self.assertEqual(len(forecasts), 12)
+        self.assertIsInstance(forecasts[0], dict)
+
+        # Expected keys
+        expected_keys = {
+            "model_name", "target", "horizon_months",
+            "city", "predict_date", "yhat",
+            "yhat_lower", "yhat_upper",
+            "features_version", "model_artifact_uri",
+        }
+        self.assertTrue(expected_keys.issubset(forecasts[0].keys()))
+
+        # Logical checks
+        self.assertEqual(forecasts[0]["model_name"], "arima")
+        self.assertEqual(forecasts[0]["city"], "Kelowna")
+        self.assertIsInstance(forecasts[0]["yhat"], float)
 
 
 if __name__ == "__main__":
