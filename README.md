@@ -20,7 +20,7 @@ The **Housing Insights + Risk Dashboard** integrates data engineering, time-seri
 
 1. **Short-Term Housing Insights** → AI/ML forecasts of home prices and rental indices (1–10 years ahead)  
    - Models: **Prophet**, **ARIMA**, **LightGBM (planned for micro-forecasts)**  
-   - Outputs: rent index and price forecasts for Kelowna, Vancouver, and Toronto  
+   - Outputs: rent index and price forecasts for Vancouver and Toronto  
 
 2. **Long-Term Housing Risk Dashboard** → macro indicators and risk classification  
    - Metrics: affordability, price-to-rent, debt-to-GDP, interest rates, and other structural measures  
@@ -36,7 +36,7 @@ The forecasting module integrates **statistical**, **machine-learning**, and **m
 |--------|--------|----------|
 | **Prophet** | Macro | Captures trend and seasonality in rent and price indices |
 | **ARIMA** | Macro | Serves as a statistical baseline for Prophet comparison |
-| **LightGBM (planned)** | Micro | Learns feature-based relationships between rent index, listings data, and macro indicators to forecast city- and property-level prices |
+| **LightGBM** | Micro | Learns feature-based relationships between rent index, listings data, and macro indicators to forecast city- and property-level prices |
 
 At the current stage, **Prophet** and **ARIMA** produce multi-horizon forecasts (1, 2, 5, 10 years) for each city and target variable.  
 All predictions are stored in the `public.model_predictions` table and visualized in the React dashboard.
@@ -47,7 +47,24 @@ The upcoming **LightGBM** layer will introduce supervised learning trained on a 
 - macro indicators from the Bank of Canada and StatCan
 - aggregated listing features (price, rent-to-price, square footage, bedrooms)
 
-This will enable **hybrid forecasting** that links macroeconomic trends with micro-market signals, generating property-type-specific predictions (e.g., *“Kelowna – 2 bed Condo → $478 K ± 5 % in 12 months”*).
+This will enable **hybrid forecasting** that links macroeconomic trends with micro-market signals, generating property-type-specific predictions (e.g., *“Vancouver – 2 bed Condo → $478 K ± 5 % in 12 months”*).
+
+---
+
+## 🧩 Database Schema Overview
+
+The project’s PostgreSQL database integrates multiple layers of data — from raw listings to model forecasts — to ensure full traceability and reproducibility.
+
+| Table | Purpose | Example Columns |
+|--------|----------|----------------|
+| `rent_listings_raw` | Raw rental listings scraped from RentFaster, Castanet, etc. | `city`, `price`, `bedrooms`, `sqft`, `url` |
+| `rents` | Monthly median rent aggregates per city and bedroom type | `city`, `date`, `bedroom_type`, `median_rent`, `source` |
+| `house_price_index` | Composite and property-type price indices (CREA, CMHC) | `city`, `date`, `hpi_composite_sa`, `mom_pct` |
+| `metrics` | Macro-economic indicators (BoC, StatCan, CMHC) | `date`, `interest_rate`, `cpi`, `gdp_growth`, `unemployment_rate` |
+| `features` | Combined macro + micro features for model training | `city`, `date`, `rent_index`, `price_index`, `debt_gdp_ratio` |
+| `model_predictions` | Multi-horizon forecasts from Prophet, ARIMA, LightGBM | `city`, `target`, `predict_date`, `yhat`, `yhat_lower`, `yhat_upper` |
+| `risk_predictions` | Risk index outputs from ARIMA or LightGBM | `city`, `predict_date`, `risk_score` |
+| `anomaly_signals` | Detected anomalies via IsolationForest | `city`, `predict_date`, `is_anomaly`, `score` |
 
 ---
 
