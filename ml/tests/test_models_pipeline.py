@@ -12,7 +12,7 @@ from ml.src.models.forecasting.arima_model import run_arima
 
 def sample_series():
     """Generate synthetic monthly time series."""
-    dates = pd.date_range("2022-01-01", periods=24, freq="M")
+    dates = pd.date_range("2022-01-01", periods=24, freq="ME")
     values = [1200 + i * 15 for i in range(24)]  # mild upward trend
     return pd.DataFrame({"date": dates, "value": values})
 
