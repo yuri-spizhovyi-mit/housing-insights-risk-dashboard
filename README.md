@@ -2,60 +2,68 @@
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-green?logo=springboot&logoColor=white)
-![Java](https://img.shields.io/badge/Java-17-red?logo=openjdk&logoColor=white)
+![Java](https://img.shields.io/badge/Java-21-red?logo=openjdk&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-blue?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue?logo=postgresql&logoColor=white)
 ![MinIO](https://img.shields.io/badge/MinIO-Storage-orange?logo=minio&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker&logoColor=white)
 
-Predicting the housing market has been attempted many times — and most models have failed.  
-This project takes another step forward, leveraging **modern AI/ML technologies** with a clear and pragmatic design, built in just three months as an MVP.  
-We approach it with both scientific rigor and a hopeful outlook for success.
+Forecasting housing market dynamics remains one of the most challenging and important problems in applied economics and data science.  
+This project provides a transparent, data-driven framework developed as a 3-month MVP to explore whether modern machine-learning and econometric approaches can improve the interpretability and predictive stability of housing indicators across Canadian cities.
 
 ---
 
 ## 📌 Project Overview
 
-The **Housing Insights + Risk Dashboard** is a 3-month MVP (Sept–Nov 2025) that combines:
+The **Housing Insights + Risk Dashboard** integrates data engineering, time-series forecasting, and economic modeling into a single analytical platform.
 
-1. **Short-term Housing Insights** → AI/ML forecasts (1–2 years) of home prices & rents  
-   - Models: Prophet, LightGBM  
-   - Deliverables: forecasts for Kelowna, Vancouver, Toronto  
+1. **Short-Term Housing Insights** → AI/ML forecasts of home prices and rental indices (1–10 years ahead)  
+   - Models: **Prophet**, **ARIMA**, **LightGBM (planned for micro-forecasts)**  
+   - Outputs: rent index and price forecasts for Kelowna, Vancouver, and Toronto  
 
-2. **Long-term Housing Risk Dashboard** → Macro indicators and risk classification  
-   - Metrics: affordability, price-to-rent, debt-to-GDP, interest rates  
-   - Crisis-similarity classifier (e.g., “Today looks 80 % like 2008”)  
+2. **Long-Term Housing Risk Dashboard** → macro indicators and risk classification  
+   - Metrics: affordability, price-to-rent, debt-to-GDP, interest rates, and other structural measures  
+   - *Planned:* crisis-similarity classifier (e.g., “today’s market resembles 2008 conditions by 80 %”)
 
 ---
 
-## 🧠 Theoretical Foundation
+## 🧠 Forecasting Framework
 
-The project is grounded in both **economic theory** and **machine learning methodology**, outlined in  
-[docs/manual/index.md](./docs/manual/index.md).  
+The forecasting module integrates **statistical**, **machine-learning**, and **macro-economic** perspectives.
 
-Key theoretical pillars include:
+| Model | Level | Purpose |
+|--------|--------|----------|
+| **Prophet** | Macro | Captures trend and seasonality in rent and price indices |
+| **ARIMA** | Macro | Serves as a statistical baseline for Prophet comparison |
+| **LightGBM (planned)** | Micro | Learns feature-based relationships between rent index, listings data, and macro indicators to forecast city- and property-level prices |
 
-- **Hedonic Pricing Theory** — housing prices reflect the sum of the implicit value of their attributes  
-- **Market Efficiency vs. Behavioral Biases** — exploring why prices deviate from fundamentals  
-- **Risk Modeling and Early-Warning Indicators** — inspired by financial stability research  
-- **AI/ML Forecasting Framework** — using time-series and ensemble models to capture trend, seasonality, and anomaly signals  
+At the current stage, **Prophet** and **ARIMA** produce multi-horizon forecasts (1, 2, 5, 10 years) for each city and target variable.  
+All predictions are stored in the `public.model_predictions` table and visualized in the React dashboard.
 
-Together, these provide the conceptual bridge between economic insight and data-driven forecasting.
+The upcoming **LightGBM** layer will introduce supervised learning trained on a historical dataset built from:
+- `house_price_index` (target variable → future HPI)
+- `rent_index`
+- macro indicators from the Bank of Canada and StatCan
+- aggregated listing features (price, rent-to-price, square footage, bedrooms)
+
+This will enable **hybrid forecasting** that links macroeconomic trends with micro-market signals, generating property-type-specific predictions (e.g., *“Kelowna – 2 bed Condo → $478 K ± 5 % in 12 months”*).
 
 ---
 
 ## 🏗 Architecture
 
-### **Phase 1 – MVP (Current)**  
-- **Data Layer:** PostgreSQL (+PostGIS), MinIO for raw snapshots and artifacts  
-- **ML Layer (Python):** Forecasting, risk indices, anomaly detection, sentiment analysis (DistilBERT)  
-- **Orchestration:** Docker Compose for Postgres, MinIO, and ETL pipelines  
-- **Frontend (React/TypeScript):** Interactive dashboard (in progress)  
+### **Phase 1 – MVP (Current)**
+- **Data Layer:** PostgreSQL (+ PostGIS), MinIO for snapshots and model artifacts  
+- **ETL Layer:** Automated pipelines for CREA, CMHC, BoC, and StatCan  
+- **ML Layer:** Prophet and ARIMA forecasts, anomaly detection, sentiment analysis (DistilBERT)  
+- **Orchestration:** Docker Compose for Postgres, MinIO, and Python ETL containers  
+- **Frontend:** React + TypeScript dashboard (in progress)  
 
-### **Phase 2 – Planned Integration (Dec 2025 – Feb 2026)**  
-- **API Gateway (Java + Spring Boot):** Will serve ML forecasts and risk indicators from Postgres to frontend clients  
-- **Authentication & Role-Based Access:** Planned implementation for secure API endpoints  
+### **Phase 2 – Planned Integration (Dec 2025 – Feb 2026)**
+- **API Gateway:** Java + Spring Boot service to expose ML forecasts and risk metrics  
+- **LightGBM Training Module:** Supervised micro-forecasting integration  
+- **Authentication & Access Control:** Secure API endpoints for research use  
 
 📖 See [docs/architecture.md](./docs/architecture.md) for technical details.
 
@@ -63,25 +71,24 @@ Together, these provide the conceptual bridge between economic insight and data-
 
 ## 🚀 Deliverables
 
-- 📊 AI-driven forecasts (Kelowna, Vancouver, Toronto)  
+- 📊 Forecasts for rent and price indices (Prophet + ARIMA)  
 - ⚙️ End-to-end ETL pipelines (CREA, CMHC, BoC, StatCan)  
-- 🤖 ML models: forecasting, risk index, anomaly detection, sentiment NLP  
-- 📑 Automated 2-page PDF reports per city  
-- 🌐 Planned REST API gateway (Spring Boot + Java 17)  
+- 🤖 ML modules: forecasting, risk indices, anomaly detection, sentiment NLP  
+- 📑 Automated two-page PDF summaries per city  
+- 🌐 Planned Spring Boot API integration with React dashboard  
 
 ---
 
 ## 👥 Team
 
-- **Yuri** → Data Engineering, ML Models, Reports  
-- **Max** → Frontend (React/TypeScript) and upcoming Spring Boot API integration  
+- **Yuri Spizhovyi** — Data Engineering, ML Modeling, Reporting  
+- **Max Spizhovyi** — Frontend Development (React/TypeScript) and Spring Boot API Integration  
 
 ---
 
 ## 📂 Documentation
 
 See the [docs](./docs) folder for:  
-
 - [Architecture](./docs/architecture.md)  
 - [Data Sources](./docs/data_sources.md)  
 - [Modeling](./docs/modeling.md)  
@@ -92,8 +99,21 @@ See the [docs](./docs) folder for:
 
 ## 🗓 Timeline
 
-- **Phase 1 (MVP):** Sept 1 – Nov 20 2025  
-- **Phase 2 (Integration):** Dec 2025 – Feb 2026  
-- See [Project Roadmap](https://github.com/users/yuri-spizhovyi-mit/projects/2/views/4)  
+| Phase | Period | Focus |
+|--------|---------|--------|
+| **I. MVP Implementation** | Sept – Nov 2025 | ETL pipelines, Prophet/ARIMA forecasting, database integration |
+| **II. System Integration** | Dec 2025 – Feb 2026 | API Gateway, LightGBM training, UI enhancements |
+| **III. Risk Modeling (optional)** | Mar – Apr 2026 | Crisis-similarity classifier and composite risk index |
+
+📈 For detailed milestones, see the [Project Roadmap](https://github.com/users/yuri-spizhovyi-mit/projects/2/views/4).
 
 ---
+
+### ✅ Summary of Updates
+
+| Topic | Status |
+|-------|--------|
+| Rephrased introduction | ✅ Now objective and research-focused |
+| Added ARIMA to models | ✅ Included in Forecasting Framework |
+| Expanded forecasting description | ✅ Reflects Prophet + ARIMA current and LightGBM planned |
+| Crisis-similarity classifier | ⚙️ Not implemented yet – planned for Phase III |

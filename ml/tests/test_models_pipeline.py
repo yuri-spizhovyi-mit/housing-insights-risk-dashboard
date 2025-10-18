@@ -31,10 +31,16 @@ class TestForecastModels(unittest.TestCase):
 
         # Check key structure
         expected_keys = {
-            "model_name", "target", "horizon_months",
-            "city", "predict_date", "yhat",
-            "yhat_lower", "yhat_upper",
-            "features_version", "model_artifact_uri",
+            "model_name",
+            "target",
+            "horizon_months",
+            "city",
+            "predict_date",
+            "yhat",
+            "yhat_lower",
+            "yhat_upper",
+            "features_version",
+            "model_artifact_uri",
         }
         self.assertTrue(expected_keys.issubset(forecasts[0].keys()))
 
@@ -55,10 +61,16 @@ class TestForecastModels(unittest.TestCase):
 
         # Expected keys
         expected_keys = {
-            "model_name", "target", "horizon_months",
-            "city", "predict_date", "yhat",
-            "yhat_lower", "yhat_upper",
-            "features_version", "model_artifact_uri",
+            "model_name",
+            "target",
+            "horizon_months",
+            "city",
+            "predict_date",
+            "yhat",
+            "yhat_lower",
+            "yhat_upper",
+            "features_version",
+            "model_artifact_uri",
         }
         self.assertTrue(expected_keys.issubset(forecasts[0].keys()))
 
