@@ -1,5 +1,5 @@
 # ================================================================
-# train_lightgbm.py — Train LightGBM regression model
+# train_lightgbm.py — v2 (compatible with all LightGBM versions)
 # ================================================================
 
 import pandas as pd
@@ -55,12 +55,13 @@ def train_lightgbm(path: str = "data/historical_features.parquet"):
         "bagging_freq": 5,
     }
 
+    # ✅ Compatible syntax for all LightGBM versions
     model = lgb.train(
         params,
         train_data,
         valid_sets=[valid_data],
         num_boost_round=500,
-        early_stopping_rounds=50,
+        callbacks=[lgb.early_stopping(stopping_rounds=50)],
     )
 
     y_pred = model.predict(X_test)

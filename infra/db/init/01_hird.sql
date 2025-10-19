@@ -120,12 +120,13 @@ CREATE TABLE IF NOT EXISTS public.rent_index (
 
 
 CREATE TABLE IF NOT EXISTS public.demographics (
-    date                    DATE,
-    city                    VARCHAR(100),
-    population              INTEGER,
-    net_migration           INTEGER,
-    age_distribution_25_34_perc DECIMAL(5, 2),
-    avg_disposable_income   DECIMAL(12, 2),
+    date                DATE NOT NULL,
+    city                VARCHAR(100) NOT NULL,
+    population          INTEGER,
+    migration_rate      NUMERIC(6,2),          -- percentage or per-1000 rate
+    age_25_34_perc      NUMERIC(5,2),          -- share of population age 25–34
+    median_income       NUMERIC(12,2),         -- median household income
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (date, city)
 );
 
@@ -133,10 +134,10 @@ CREATE TABLE IF NOT EXISTS public.demographics (
 -- -----------------------------------------------------------------------------
 -- Macro-Economic & Contextual Tables
 -- -----------------------------------------------------------------------------
-
+DROP TABLE IF EXISTS public.macro_economic_data CASCADE;
 CREATE TABLE IF NOT EXISTS public.macro_economic_data (
     date                DATE,
-    province            VARCHAR(100),
+    city            VARCHAR(100),
     unemployment_rate   DECIMAL(5, 2),
     gdp_growth_rate     DECIMAL(5, 2),
     prime_lending_rate  DECIMAL(5, 2),
