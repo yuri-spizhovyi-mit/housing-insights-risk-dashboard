@@ -1,12 +1,20 @@
+from dotenv import find_dotenv, load_dotenv
+import os
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from datetime import datetime
 
-# --------------------------------------------------------------------
-# Direct Neon DB URL
-# --------------------------------------------------------------------
-NEON_DATABASE_URL = "postgresql+psycopg2://neondb_owner:npg_nNJqVB2lAKc5@ep-green-queen-adrdjlhp-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-#NEON_DATABASE_URL="postgresql+psycopg2://postgres:postgres@localhost:5433/hird"
+# Load environment
+load_dotenv(find_dotenv(usecwd=True))
+NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL")
+
+if not NEON_DATABASE_URL:
+    raise RuntimeError("❌ NEON_DATABASE_URL not found in .env")
+
+engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
+print("[DEBUG] Connected to Neon via .env")
+
+
 # --------------------------------------------------------------------
 # City sheet mapping (sheet name → city name)
 # --------------------------------------------------------------------
@@ -17,8 +25,9 @@ CITY_SHEETS = {
     "EDMONTON": "Edmonton",
     "WINNIPEG": "Winnipeg",
     "OTTAWA": "Ottawa",
-    "GREATER_TORONTO": "Toronto"
+    "GREATER_TORONTO": "Toronto",
 }
+
 
 # --------------------------------------------------------------------
 # Load and transform CREA Excel workbook
@@ -33,75 +42,70 @@ def load_crea_xlsx(path="data/house_price_index.xlsx"):
             print(f"[WARN] Cannot read sheet {sheet}: {e}")
             continue
 
-        # Clean and normalize columns
         df.columns = [c.strip().replace(" ", "_") for c in df.columns]
-        if "Date" not in df.columns and "DATE" not in df.columns:
-            print(f"[WARN] No 'Date' column in {sheet}, skipping.")
-            continue
-
         date_col = "Date" if "Date" in df.columns else "DATE"
+        if date_col not in df.columns:
+            print(f"[WARN] Missing Date column in {sheet}, skipping.")
+            continue
 
         # Melt into long format
         measures = [c for c in df.columns if c != date_col]
-        long_df = df.melt(id_vars=[date_col], value_vars=measures,
-                          var_name="measure", value_name="index_value")
+        long_df = df.melt(
+            id_vars=[date_col],
+            value_vars=measures,
+            var_name="measure",
+            value_name="index_value",
+        )
         long_df["city"] = city
-
-        # Clean data
-        long_df = long_df.dropna(subset=["index_value"])
         long_df["date"] = pd.to_datetime(long_df[date_col], errors="coerce")
-        long_df = long_df.dropna(subset=["date"])
         long_df["index_value"] = pd.to_numeric(long_df["index_value"], errors="coerce")
-        long_df = long_df.dropna(subset=["index_value"])
+        long_df = long_df.dropna(subset=["date", "index_value"])
 
         all_rows.append(long_df[["city", "date", "measure", "index_value"]])
-
-        print(f"[INFO] Processed {city}: {len(long_df)} rows.")
+        print(f"[INFO] {city}: {len(long_df)} rows.")
 
     if not all_rows:
-        print("[WARN] No data collected from any sheets.")
-        return pd.DataFrame()
+        raise RuntimeError("No valid data found in Excel workbook.")
 
-    result = pd.concat(all_rows, ignore_index=True)
-    result["source"] = "CREA_XLSX"
-    print(f"[INFO] Combined total rows: {len(result)}")
-    return result
+    df = pd.concat(all_rows, ignore_index=True)
+    print(f"[INFO] Combined total rows: {len(df)}")
+    return df
 
 
 # --------------------------------------------------------------------
-# Write to Neon database
+# Bulk write to Neon (fast, safe)
 # --------------------------------------------------------------------
-def write_to_neon(df: pd.DataFrame):
+def write_bulk(df: pd.DataFrame, table_name: str = "house_price_index"):
     if df.empty:
-        print("[WARN] Nothing to write to Neon.")
+        print("[WARN] Nothing to write to database.")
         return
 
     engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
-    with engine.begin() as conn:
-        for _, row in df.iterrows():
-            conn.execute(
-                text("""
-                INSERT INTO public.house_price_index
-                (date, city, measure, index_value)
-                VALUES (:date, :city, :measure, :index_value)
-                ON CONFLICT (date, city, measure) DO UPDATE
-                SET index_value = EXCLUDED.index_value;
-                """),
-                {
-                    "date": row["date"],
-                    "city": row["city"],
-                    "measure": row["measure"],
-                    "index_value": float(row["index_value"]),
-                },
-            )
-    print(f"[OK] Inserted or updated {len(df)} rows in Neon house_price_index.")
+    print("[DEBUG] Connected to Neon successfully.")
+
+    # Write in chunks of 2000 rows
+    df.to_sql(
+        table_name,
+        con=engine,
+        schema="public",
+        if_exists="append",
+        index=False,
+        method="multi",
+        chunksize=2000,
+    )
+
+    print(f"[OK] Bulk inserted {len(df)} rows into {table_name}.")
 
 
 # --------------------------------------------------------------------
 # Entrypoint
 # --------------------------------------------------------------------
 if __name__ == "__main__":
-    print("[DEBUG] CREA Excel loader starting...")
+    start = datetime.now()
+    print("[DEBUG] CREA bulk Neon loader starting...")
+
     df = load_crea_xlsx()
-    write_to_neon(df)
-    print("[DONE] CREA Excel data successfully loaded into Neon.")
+    write_bulk(df)
+
+    elapsed = datetime.now() - start
+    print(f"[DONE] Bulk load completed in {elapsed}.")
