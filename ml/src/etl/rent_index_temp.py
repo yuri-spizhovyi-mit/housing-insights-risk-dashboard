@@ -1,11 +1,19 @@
+from dotenv import find_dotenv, load_dotenv
+import os
 import pandas as pd
+from sqlalchemy import create_engine
 from datetime import datetime
-from sqlalchemy import create_engine, text
 
-# --------------------------------------------------------------------
-# Direct Neon DB URL (bypasses .env)
-# --------------------------------------------------------------------
-NEON_DATABASE_URL = "postgresql+psycopg2://neondb_owner:npg_nNJqVB2lAKc5@ep-green-queen-adrdjlhp-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# Load environment
+load_dotenv(find_dotenv(usecwd=True))
+NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL")
+
+if not NEON_DATABASE_URL:
+    raise RuntimeError("❌ NEON_DATABASE_URL not found in .env")
+
+engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
+print("[DEBUG] Connected to Neon via .env")
+
 
 # --------------------------------------------------------------------
 # Load and preprocess rent data
@@ -35,8 +43,15 @@ def load_rent_csv(path="data/rent_index.csv"):
 
     # Filter to major cities
     target_cities = [
-        "Vancouver", "Toronto", "Montréal", "Calgary", "Edmonton",
-        "Ottawa", "Winnipeg", "Victoria", "Kelowna"
+        "Vancouver",
+        "Toronto",
+        "Montréal",
+        "Calgary",
+        "Edmonton",
+        "Ottawa",
+        "Winnipeg",
+        "Victoria",
+        "Kelowna",
     ]
     df = df[df["city"].isin(target_cities)]
 
@@ -59,19 +74,31 @@ def load_rent_csv(path="data/rent_index.csv"):
 
     df = df.groupby(["city", "date", "unit_col"], as_index=False)["value"].mean()
 
-    wide = df.pivot(index=["city", "date"], columns="unit_col", values="value").reset_index()
+    wide = df.pivot(
+        index=["city", "date"], columns="unit_col", values="value"
+    ).reset_index()
     wide.columns.name = None
     wide = wide.rename_axis(None, axis=1)
 
-    for col in ["median_rent_apartment_1br", "median_rent_apartment_2br", "median_rent_apartment_3br"]:
+    for col in [
+        "median_rent_apartment_1br",
+        "median_rent_apartment_2br",
+        "median_rent_apartment_3br",
+    ]:
         if col not in wide.columns:
             wide[col] = None
 
     wide["index_value"] = wide[
-        ["median_rent_apartment_1br", "median_rent_apartment_2br", "median_rent_apartment_3br"]
+        [
+            "median_rent_apartment_1br",
+            "median_rent_apartment_2br",
+            "median_rent_apartment_3br",
+        ]
     ].mean(axis=1, skipna=True)
 
-    print(f"[INFO] Loaded rent data for {wide['city'].nunique()} cities, {len(wide)} rows total.")
+    print(
+        f"[INFO] Loaded rent data for {wide['city'].nunique()} cities, {len(wide)} rows total."
+    )
     return wide
 
 
@@ -102,10 +129,18 @@ def write_to_neon(df: pd.DataFrame):
                 {
                     "date": row["date"],
                     "city": row["city"],
-                    "index_value": float(row["index_value"]) if pd.notna(row["index_value"]) else None,
-                    "r1": float(row.get("median_rent_apartment_1br", None)) if pd.notna(row.get("median_rent_apartment_1br", None)) else None,
-                    "r2": float(row.get("median_rent_apartment_2br", None)) if pd.notna(row.get("median_rent_apartment_2br", None)) else None,
-                    "r3": float(row.get("median_rent_apartment_3br", None)) if pd.notna(row.get("median_rent_apartment_3br", None)) else None,
+                    "index_value": float(row["index_value"])
+                    if pd.notna(row["index_value"])
+                    else None,
+                    "r1": float(row.get("median_rent_apartment_1br", None))
+                    if pd.notna(row.get("median_rent_apartment_1br", None))
+                    else None,
+                    "r2": float(row.get("median_rent_apartment_2br", None))
+                    if pd.notna(row.get("median_rent_apartment_2br", None))
+                    else None,
+                    "r3": float(row.get("median_rent_apartment_3br", None))
+                    if pd.notna(row.get("median_rent_apartment_3br", None))
+                    else None,
                 },
             )
     print(f"[OK] Inserted or updated {len(df)} rows to Neon rent_index.")

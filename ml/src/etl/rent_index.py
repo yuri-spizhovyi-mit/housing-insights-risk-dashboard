@@ -27,20 +27,29 @@ def load_rent_csv(path="data/rent_index.csv"):
         df["city"]
         .astype(str)
         .str.replace("CMA of ", "", regex=False)
-        .str.replace(",.*", "", regex=True)   # remove everything after comma (province)
+        .str.replace(",.*", "", regex=True)  # remove everything after comma (province)
         .str.strip()
         .str.title()
     )
 
     # Filter to target cities
     target_cities = [
-        "Vancouver", "Toronto", "Montréal", "Calgary", "Edmonton",
-        "Ottawa", "Winnipeg", "Victoria", "Kelowna"
+        "Vancouver",
+        "Toronto",
+        "Montréal",
+        "Calgary",
+        "Edmonton",
+        "Ottawa",
+        "Winnipeg",
+        "Victoria",
+        "Kelowna",
     ]
     df = df[df["city"].isin(target_cities)]
 
     if df.empty:
-        print("[WARN] No matching cities found in rent_index.csv — please verify GEO names.")
+        print(
+            "[WARN] No matching cities found in rent_index.csv — please verify GEO names."
+        )
         return pd.DataFrame()
 
     print(f"[DEBUG] Filtered cities: {sorted(df['city'].unique().tolist())}")
@@ -62,25 +71,35 @@ def load_rent_csv(path="data/rent_index.csv"):
     df = df.groupby(["city", "date", "unit_col"], as_index=False)["value"].mean()
 
     # Pivot to wide format
-    wide = df.pivot(index=["city", "date"], columns="unit_col", values="value").reset_index()
+    wide = df.pivot(
+        index=["city", "date"], columns="unit_col", values="value"
+    ).reset_index()
 
     # Flatten multi-index columns
     wide.columns.name = None
     wide = wide.rename_axis(None, axis=1)
 
     # Ensure all needed columns exist
-    for col in ["median_rent_apartment_1br", "median_rent_apartment_2br", "median_rent_apartment_3br"]:
+    for col in [
+        "median_rent_apartment_1br",
+        "median_rent_apartment_2br",
+        "median_rent_apartment_3br",
+    ]:
         if col not in wide.columns:
             wide[col] = None
 
     # Compute index_value as mean across available bedrooms
     wide["index_value"] = wide[
-        ["median_rent_apartment_1br",
-         "median_rent_apartment_2br",
-         "median_rent_apartment_3br"]
+        [
+            "median_rent_apartment_1br",
+            "median_rent_apartment_2br",
+            "median_rent_apartment_3br",
+        ]
     ].mean(axis=1, skipna=True)
 
-    print(f"[INFO] Loaded rent data for {wide['city'].nunique()} cities, {len(wide)} rows total.")
+    print(
+        f"[INFO] Loaded rent data for {wide['city'].nunique()} cities, {len(wide)} rows total."
+    )
     return wide
 
 
@@ -112,10 +131,18 @@ def write_rent_index(df: pd.DataFrame):
                 {
                     "date": row["date"],
                     "city": row["city"],
-                    "index_value": float(row["index_value"]) if pd.notna(row["index_value"]) else None,
-                    "r1": float(row.get("median_rent_apartment_1br", None)) if pd.notna(row.get("median_rent_apartment_1br", None)) else None,
-                    "r2": float(row.get("median_rent_apartment_2br", None)) if pd.notna(row.get("median_rent_apartment_2br", None)) else None,
-                    "r3": float(row.get("median_rent_apartment_3br", None)) if pd.notna(row.get("median_rent_apartment_3br", None)) else None,
+                    "index_value": float(row["index_value"])
+                    if pd.notna(row["index_value"])
+                    else None,
+                    "r1": float(row.get("median_rent_apartment_1br", None))
+                    if pd.notna(row.get("median_rent_apartment_1br", None))
+                    else None,
+                    "r2": float(row.get("median_rent_apartment_2br", None))
+                    if pd.notna(row.get("median_rent_apartment_2br", None))
+                    else None,
+                    "r3": float(row.get("median_rent_apartment_3br", None))
+                    if pd.notna(row.get("median_rent_apartment_3br", None))
+                    else None,
                 },
             )
     print(f"[OK] Inserted or updated {len(df)} rent_index rows.")

@@ -6,11 +6,14 @@ import numpy as np
 import os
 
 ENGINE = create_engine(
-       os.environ.get("DATABASE_URL", "postgresql+psycopg2://postgres:postgres@localhost:5433/hird")
-   )
+    os.environ.get(
+        "DATABASE_URL", "postgresql+psycopg2://postgres:postgres@localhost:5433/hird"
+    )
+)
 
 CITY = "Vancouver"
-TARGET = "rent_index"   # <- switch to 'house_price_index' to compare
+TARGET = "rent_index"  # <- switch to 'house_price_index' to compare
+
 
 def build_training_df(city, target):
     with ENGINE.begin() as conn:
@@ -40,6 +43,7 @@ def build_training_df(city, target):
         df = pd.read_sql(q, conn, params={"city": city})
     return df
 
+
 def main():
     df = build_training_df(CITY, TARGET)
 
@@ -58,14 +62,15 @@ def main():
 
     # Fit a tiny model to see immediate forecast scale (no writing to DB)
     m = Prophet(uncertainty_samples=0)  # matches your collapsed intervals
-    m.fit(df.rename(columns={"ds":"ds", "y":"y"}))
+    m.fit(df.rename(columns={"ds": "ds", "y": "y"}))
 
     future = m.make_future_dataframe(periods=24, freq="MS")
-    fcst = m.predict(future)[["ds","yhat","yhat_lower","yhat_upper"]]
+    fcst = m.predict(future)[["ds", "yhat", "yhat_lower", "yhat_upper"]]
 
     print("\n=== SAMPLE FORECAST (IN-MEMORY) ===")
     print(fcst.tail(12))
     print("\nMin yhat:", fcst["yhat"].min(), "Max yhat:", fcst["yhat"].max())
+
 
 if __name__ == "__main__":
     main()
