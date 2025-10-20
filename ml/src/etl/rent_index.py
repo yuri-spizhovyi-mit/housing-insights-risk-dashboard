@@ -5,107 +5,92 @@ from ml.src.etl.db import get_engine
 
 
 # --------------------------------------------------------------------
-# 1. Helper functions
+# Rent Index ETL from StatCan / CMHC CSV (Final Stable Version)
 # --------------------------------------------------------------------
-def safe_int(val):
-    """Convert to int or return None if NaN/invalid."""
-    if pd.isna(val):
-        return None
-    try:
-        return int(val)
-    except (ValueError, TypeError):
-        return None
+def load_rent_csv(path="data/rent_index.csv"):
+    """Load and preprocess CMHC/StatCan rent data from CSV."""
+    df = pd.read_csv(path, low_memory=False)
+    df.columns = [c.strip() for c in df.columns]
 
+    # Expected columns: REF_DATE, GEO, Type of structure, Type of unit, VALUE
+    df = df.rename(
+        columns={
+            "REF_DATE": "year",
+            "GEO": "city",
+            "Type of unit": "unit_type",
+            "VALUE": "value",
+        }
+    )
 
-def safe_float(val):
-    """Convert to float or return None if NaN/invalid."""
-    if pd.isna(val):
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
-
-
-# --------------------------------------------------------------------
-# 2. Load raw listings
-# --------------------------------------------------------------------
-def fetch_rent_data(ctx):
-    """Fetch rental listings for all cities from listings_raw."""
-    engine = get_engine()
-    query = """
-        SELECT date_posted, city, price, bedrooms
-        FROM public.listings_raw
-        WHERE listing_type ILIKE 'rent%'   -- handles 'Rental' or 'Rent'
-          AND price IS NOT NULL
-          AND price > 100
-    """
-
-    with engine.connect() as conn:
-        df = pd.read_sql(text(query), conn)
-
-    if df.empty:
-        print("[WARN] No rental listings found.")
-        return df
-
-    # Normalize city names (remove province, unify case)
+    # Normalize GEO field -> remove province names, "CMA of", etc.
     df["city"] = (
         df["city"]
         .astype(str)
-        .str.replace(",.*", "", regex=True)
+        .str.replace("CMA of ", "", regex=False)
+        .str.replace(",.*", "", regex=True)   # remove everything after comma (province)
         .str.strip()
         .str.title()
     )
-    return df
 
+    # Filter to target cities
+    target_cities = [
+        "Vancouver", "Toronto", "Montréal", "Calgary", "Edmonton",
+        "Ottawa", "Winnipeg", "Victoria", "Kelowna"
+    ]
+    df = df[df["city"].isin(target_cities)]
 
-# --------------------------------------------------------------------
-# 3. Aggregate monthly medians per city
-# --------------------------------------------------------------------
-def transform_rent_index(df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate monthly rent metrics for all cities."""
     if df.empty:
-        return df
+        print("[WARN] No matching cities found in rent_index.csv — please verify GEO names.")
+        return pd.DataFrame()
 
-    df["month"] = pd.to_datetime(df["date_posted"]).dt.to_period("M").dt.to_timestamp()
+    print(f"[DEBUG] Filtered cities: {sorted(df['city'].unique().tolist())}")
 
-    def agg_func(g):
-        return pd.Series(
-            {
-                "median_rent_apartment_1br": g.loc[
-                    g["bedrooms"] == 1, "price"
-                ].median(),
-                "median_rent_apartment_2br": g.loc[
-                    g["bedrooms"] == 2, "price"
-                ].median(),
-                "median_rent_apartment_3br": g.loc[
-                    g["bedrooms"] == 3, "price"
-                ].median(),
-                "active_rental_count": len(g),
-                "avg_rental_days": None,  # placeholder for scraped data
-                "index_value": g["price"].median(),
-            }
-        )
+    # Convert year to datetime (use July 1st of that year)
+    df["date"] = pd.to_datetime(df["year"].astype(str) + "-07-01")
 
-    # Silence Pandas FutureWarning by excluding group columns explicitly
-    agg = (
-        df.groupby(["city", "month"], group_keys=False)
-        .apply(agg_func, include_groups=False)  # ✅ removes warning
-        .reset_index()
-    )
+    # Map unit types to our target columns
+    mapping = {
+        "Bachelor units": "median_rent_apartment_0br",
+        "One bedroom units": "median_rent_apartment_1br",
+        "Two bedroom units": "median_rent_apartment_2br",
+        "Three bedroom units": "median_rent_apartment_3br",
+    }
+    df = df[df["unit_type"].isin(mapping.keys())]
+    df["unit_col"] = df["unit_type"].map(mapping)
 
-    agg.rename(columns={"month": "date"}, inplace=True)
-    print(f"[INFO] Aggregated {len(agg)} monthly city rent records.")
-    return agg
+    # Aggregate duplicates by (city, date, unit_col)
+    df = df.groupby(["city", "date", "unit_col"], as_index=False)["value"].mean()
+
+    # Pivot to wide format
+    wide = df.pivot(index=["city", "date"], columns="unit_col", values="value").reset_index()
+
+    # Flatten multi-index columns
+    wide.columns.name = None
+    wide = wide.rename_axis(None, axis=1)
+
+    # Ensure all needed columns exist
+    for col in ["median_rent_apartment_1br", "median_rent_apartment_2br", "median_rent_apartment_3br"]:
+        if col not in wide.columns:
+            wide[col] = None
+
+    # Compute index_value as mean across available bedrooms
+    wide["index_value"] = wide[
+        ["median_rent_apartment_1br",
+         "median_rent_apartment_2br",
+         "median_rent_apartment_3br"]
+    ].mean(axis=1, skipna=True)
+
+    print(f"[INFO] Loaded rent data for {wide['city'].nunique()} cities, {len(wide)} rows total.")
+    return wide
 
 
 # --------------------------------------------------------------------
-# 4. Write to public.rent_index
+# Write to Postgres
 # --------------------------------------------------------------------
-def write_rent_index(df: pd.DataFrame, ctx):
-    """Upsert aggregated rent data into public.rent_index."""
+def write_rent_index(df: pd.DataFrame):
+    """Upsert rent index data into public.rent_index."""
     if df.empty:
-        print("[WARN] Nothing to write to rent_index.")
+        print("[WARN] No rent index data to write.")
         return
 
     engine = get_engine()
@@ -117,45 +102,33 @@ def write_rent_index(df: pd.DataFrame, ctx):
                 (date, city, index_value,
                  median_rent_apartment_1br, median_rent_apartment_2br, median_rent_apartment_3br,
                  active_rental_count, avg_rental_days)
-                VALUES (:date, :city, :index_value, :r1, :r2, :r3, :count, :days)
+                VALUES (:date, :city, :index_value, :r1, :r2, :r3, NULL, NULL)
                 ON CONFLICT (date, city) DO UPDATE
                 SET index_value = EXCLUDED.index_value,
                     median_rent_apartment_1br = EXCLUDED.median_rent_apartment_1br,
                     median_rent_apartment_2br = EXCLUDED.median_rent_apartment_2br,
-                    median_rent_apartment_3br = EXCLUDED.median_rent_apartment_3br,
-                    active_rental_count = EXCLUDED.active_rental_count,
-                    avg_rental_days = EXCLUDED.avg_rental_days;
+                    median_rent_apartment_3br = EXCLUDED.median_rent_apartment_3br;
                 """),
                 {
                     "date": row["date"],
                     "city": row["city"],
-                    "index_value": safe_float(row["index_value"]),
-                    "r1": safe_float(row["median_rent_apartment_1br"]),
-                    "r2": safe_float(row["median_rent_apartment_2br"]),
-                    "r3": safe_float(row["median_rent_apartment_3br"]),
-                    "count": safe_int(row["active_rental_count"]),
-                    "days": safe_int(row["avg_rental_days"]),
+                    "index_value": float(row["index_value"]) if pd.notna(row["index_value"]) else None,
+                    "r1": float(row.get("median_rent_apartment_1br", None)) if pd.notna(row.get("median_rent_apartment_1br", None)) else None,
+                    "r2": float(row.get("median_rent_apartment_2br", None)) if pd.notna(row.get("median_rent_apartment_2br", None)) else None,
+                    "r3": float(row.get("median_rent_apartment_3br", None)) if pd.notna(row.get("median_rent_apartment_3br", None)) else None,
                 },
             )
-    print(f"[OK] Inserted/updated {len(df)} rows → rent_index.")
+    print(f"[OK] Inserted or updated {len(df)} rent_index rows.")
 
 
 # --------------------------------------------------------------------
-# 5. Entrypoint
+# Entrypoint
 # --------------------------------------------------------------------
-def run(ctx):
-    df = fetch_rent_data(ctx)
-    agg = transform_rent_index(df)
-    write_rent_index(agg, ctx)
-    print("[DONE] rent_index ETL complete.")
+def run():
+    df = load_rent_csv()
+    write_rent_index(df)
+    print("[DONE] rent_index ETL from CSV complete.")
 
 
-# --------------------------------------------------------------------
-# 6. CLI Entrypoint
-# --------------------------------------------------------------------
 if __name__ == "__main__":
-    from datetime import date
-    from ml.src.etl import base
-
-    ctx = base.Context(run_date=date.today())
-    run(ctx)
+    run()
