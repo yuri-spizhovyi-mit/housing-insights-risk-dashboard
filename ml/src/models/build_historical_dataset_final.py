@@ -26,7 +26,7 @@ def get_engine():
 
 def month_floor(s: pd.Series) -> pd.Series:
     dt = pd.to_datetime(s, errors="coerce")
-    return dt.dt.to_period("M").dt.to_timestamp("MS")  # month start
+    return dt.dt.to_period("M").dt.to_timestamp()  # month start
 
 
 def build_historical_dataset(engine, lookback_years: int = 25) -> pd.DataFrame:
