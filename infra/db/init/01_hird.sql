@@ -9,6 +9,69 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- -----------------------------------------------------------------------------
+-- Aggregated Time-Series Tables
+-- These tables have composite primary keys (date, city/province).
+-- -----------------------------------------------------------------------------
+
+-- CREA HPI table (MLS® Home Price Index)
+CREATE TABLE IF NOT EXISTS public.house_price_index (
+    date DATE NOT NULL,
+    city TEXT NOT NULL,
+    property_type TEXT NOT NULL,
+    benchmark_price NUMERIC,
+    source TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (date, city, property_type)
+);
+
+-- -----------------------------------------------------------------------------
+-- 📊 Table: public.metrics
+-- Purpose: Store monthly national or city-level economic indicators
+--           (e.g., mortgage rates, overnight rate, unemployment, CPI)
+-- Frequency: Monthly (YYYY-MM-01)
+-- Grain: One observation per (date, city, metric)
+-- -----------------------------------------------------------------------------
+-- Data Source(s):
+--   • Bank of Canada (BoC)  – Overnight rate (V39079), 5-year mortgage rate (V80691335)
+--   • Statistics Canada     – Unemployment rate and other labour indicators
+--   • Internal CSV/ETL      – Optional additional metrics
+-- -----------------------------------------------------------------------------
+-- Schema Reference: Data_ETL Section 2.4 — Destination Table
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.metrics (
+    date DATE NOT NULL,                -- Month start (YYYY-MM-01)
+    city TEXT NOT NULL,                -- Region or national aggregate ('Canada' if national)
+    metric TEXT NOT NULL,              -- Metric name (e.g., 'mortgage_rate', 'overnight_rate', 'unemployment_rate')
+    value NUMERIC,                     -- Metric numeric value (e.g., 5.25)
+    source TEXT DEFAULT 'unknown',     -- Data source identifier (e.g., 'BoC_V39079', 'StatsCan_14-10-0287')
+    created_at TIMESTAMPTZ DEFAULT now(), -- Record ingestion timestamp
+    PRIMARY KEY (date, city, metric)
+);
+
+COMMENT ON TABLE public.metrics IS
+    'Stores monthly economic indicators such as mortgage rate, overnight rate, and unemployment rate used as features in housing forecasts.';
+
+COMMENT ON COLUMN public.metrics.date IS
+    'Month start date (YYYY-MM-01) — all series aligned to monthly frequency.';
+
+COMMENT ON COLUMN public.metrics.city IS
+    'Geographic level of observation (e.g., Toronto, Vancouver, or Canada for national series).';
+
+COMMENT ON COLUMN public.metrics.metric IS
+    'Canonical metric name (mortgage_rate, overnight_rate, unemployment_rate, etc.).';
+
+COMMENT ON COLUMN public.metrics.value IS
+    'Numeric value of the metric (in percent or raw index units depending on source).';
+
+COMMENT ON COLUMN public.metrics.source IS
+    'Source identifier for traceability (e.g., BoC series code, StatsCan table ID).';
+
+COMMENT ON COLUMN public.metrics.created_at IS
+    'Timestamp of record creation in database.';
+
+
+-- -----------------------------------------------------------------------------
 -- Raw Data Tables
 -- These tables are the initial "dump" from data collection.
 -- -----------------------------------------------------------------------------
@@ -65,21 +128,7 @@ CREATE INDEX IF NOT EXISTS idx_model_predictions_city_horizon_date
 ON public.model_predictions (city, target, horizon_months, predict_date);
 
 
--- -----------------------------------------------------------------------------
--- Aggregated Time-Series Tables
--- These tables have composite primary keys (date, city/province).
--- -----------------------------------------------------------------------------
 
--- CREA HPI table (MLS® Home Price Index)
-CREATE TABLE IF NOT EXISTS public.house_price_index (
-    date DATE NOT NULL,
-    city TEXT NOT NULL,
-    property_type TEXT NOT NULL,
-    benchmark_price NUMERIC,
-    source TEXT,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY (date, city, property_type)
-);
 
 
 CREATE TABLE IF NOT EXISTS public.rent_index (
@@ -189,12 +238,3 @@ CREATE TABLE IF NOT EXISTS public.anomaly_signals (
 CREATE INDEX IF NOT EXISTS idx_anomaly_signals_city_target_date
   ON public.anomaly_signals(city, target, detect_date);
 
-CREATE TABLE IF NOT EXISTS public.metrics (
-    id SERIAL PRIMARY KEY,
-    city TEXT NOT NULL,
-    date DATE NOT NULL,
-    metric TEXT NOT NULL,
-    value NUMERIC,
-    source TEXT DEFAULT 'unknown',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
