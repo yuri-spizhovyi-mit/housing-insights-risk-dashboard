@@ -72,12 +72,13 @@ ON public.model_predictions (city, target, horizon_months, predict_date);
 
 -- CREA HPI table (MLS® Home Price Index)
 CREATE TABLE IF NOT EXISTS public.house_price_index (
-    city          VARCHAR(100)    NOT NULL,
-    "date"        DATE            NOT NULL,
-    index_value   DOUBLE PRECISION,
-    measure       VARCHAR(100)    NOT NULL,
-    source        VARCHAR(50)     NOT NULL,
-    CONSTRAINT house_price_index_pkey PRIMARY KEY (city, "date", measure)
+    date DATE NOT NULL,
+    city TEXT NOT NULL,
+    property_type TEXT NOT NULL,
+    benchmark_price NUMERIC,
+    source TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (date, city, property_type)
 );
 
 
