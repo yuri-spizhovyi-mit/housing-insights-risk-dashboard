@@ -70,6 +70,48 @@ COMMENT ON COLUMN public.metrics.source IS
 COMMENT ON COLUMN public.metrics.created_at IS
     'Timestamp of record creation in database.';
 
+-- -----------------------------------------------------------------------------
+-- 🏙️  Table: public.rent_index
+-- Purpose:
+--   Store annual CMHC/StatCan rent survey data normalized to monthly grain.
+--   Each row represents rent metrics for a (date, city, unit_type).
+-- -----------------------------------------------------------------------------
+
+DROP TABLE IF EXISTS public.rent_index CASCADE;
+
+CREATE TABLE public.rent_index (
+    date          DATE        NOT NULL,           -- Month start (YYYY-MM-01)
+    city          TEXT        NOT NULL,           -- City / CMA name
+    rent_value    NUMERIC(10,2),                  -- Average monthly rent (CAD)
+    data_flag     TEXT,                           -- ORIG_ANNUAL, DERIVED_ANNUAL, LOCF_FROM_2024
+    source        TEXT DEFAULT 'CMHC_Rental_Market_Survey',
+    last_seen     TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (date, city)
+);
+
+-- -----------------------------------------------------------------------------
+-- Comments for documentation
+-- -----------------------------------------------------------------------------
+COMMENT ON TABLE public.rent_index IS
+    'Annual CMHC/StatCan rent data normalized to monthly grain (date=YYYY-MM-01).';
+
+COMMENT ON COLUMN public.rent_index.date IS
+    'Canonical date (month start). Annual values expanded to monthly rows when used in features.';
+
+COMMENT ON COLUMN public.rent_index.city IS
+    'Municipality or CMA name normalized to match CREA city names.';
+
+COMMENT ON COLUMN public.rent_index.rent_value IS
+    'Average monthly rent (CAD) for the given unit_type and city.';
+
+COMMENT ON COLUMN public.rent_index.data_flag IS
+    'Indicates data provenance: ORIG_ANNUAL, DERIVED_ANNUAL, LOCF_FROM_2024.';
+
+COMMENT ON COLUMN public.rent_index.source IS
+    'Original dataset reference (e.g. CMHC_Rental_Market_Survey_2024).';
+
+COMMENT ON COLUMN public.rent_index.last_seen IS
+    'Timestamp of ETL load or update.';
 
 -- -----------------------------------------------------------------------------
 -- Raw Data Tables
@@ -127,21 +169,6 @@ CREATE TABLE IF NOT EXISTS public.model_predictions (
 CREATE INDEX IF NOT EXISTS idx_model_predictions_city_horizon_date
 ON public.model_predictions (city, target, horizon_months, predict_date);
 
-
-
-
-
-CREATE TABLE IF NOT EXISTS public.rent_index (
-    date                        DATE,
-    city                        VARCHAR(100),
-    index_value                 DECIMAL(10, 2),
-    median_rent_apartment_1br   DECIMAL(12, 2),
-    median_rent_apartment_2br   DECIMAL(12, 2),
-    median_rent_apartment_3br   DECIMAL(12, 2),
-    active_rental_count         INTEGER,
-    avg_rental_days             INTEGER,
-    PRIMARY KEY (date, city)
-);
 
 
 CREATE TABLE IF NOT EXISTS public.demographics (

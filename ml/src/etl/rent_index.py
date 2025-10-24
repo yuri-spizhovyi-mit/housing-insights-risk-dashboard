@@ -1,161 +1,210 @@
+# ml/src/etl/rent_index.py
+"""
+ETL: Rent Index — simplified macro version (city-level average rents)
+----------------------------------------------------------
+Purpose:
+Load CMHC annual rent data, compute city-level mean rent per year, expand
+to monthly rows (2005-01–2025-08), and insert into public.rent_index.
+
+Table schema
+-------------
+public.rent_index (
+    date DATE NOT NULL,           -- YYYY-MM-01
+    city TEXT NOT NULL,           -- City name
+    rent_value NUMERIC(10,2),     -- Average monthly rent (CAD)
+    data_flag TEXT,               -- ORIG_ANNUAL | DERIVED_ANNUAL | LOCF_FROM_2024
+    source TEXT DEFAULT 'CMHC_Rental_Market_Survey',
+    last_seen TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (date, city)
+)
+"""
+
+import os
 import pandas as pd
-from datetime import datetime
-from sqlalchemy import text
-from ml.src.etl.db import get_engine
+from sqlalchemy import create_engine, text
+from dotenv import load_dotenv, find_dotenv
+
+TARGET_CITIES = [
+    "Victoria",
+    "Vancouver",
+    "Calgary",
+    "Edmonton",
+    "Winnipeg",
+    "Ottawa",
+    "Toronto",
+]
+
+# -----------------------------------------------------------------------------
+# DB Connection
+# -----------------------------------------------------------------------------
+load_dotenv(find_dotenv(usecwd=True))
+NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL")
+if not NEON_DATABASE_URL:
+    raise RuntimeError("❌ NEON_DATABASE_URL not found in .env")
+engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
+print("[DEBUG] Connected to Neon database.")
 
 
-# --------------------------------------------------------------------
-# Rent Index ETL from StatCan / CMHC CSV (Final Stable Version)
-# --------------------------------------------------------------------
-def load_rent_csv(path="data/rent_index.csv"):
-    """Load and preprocess CMHC/StatCan rent data from CSV."""
+# -----------------------------------------------------------------------------
+# Recreate Table
+# -----------------------------------------------------------------------------
+def recreate_rent_index_table(engine):
+    ddl = """
+    DROP TABLE IF EXISTS public.rent_index CASCADE;
+    CREATE TABLE public.rent_index (
+        date DATE NOT NULL,
+        city TEXT NOT NULL,
+        rent_value NUMERIC(10,2),
+        data_flag TEXT,
+        source TEXT DEFAULT 'CMHC_Rental_Market_Survey',
+        last_seen TIMESTAMPTZ DEFAULT now(),
+        PRIMARY KEY (date, city)
+    );
+    COMMENT ON TABLE public.rent_index IS
+        'City-level monthly apartment rent averages derived from CMHC annual survey data.';
+    """
+    with engine.begin() as conn:
+        for stmt in ddl.strip().split(";"):
+            s = stmt.strip()
+            if s:
+                conn.execute(text(s))
+    print("[DEBUG] Recreated table public.rent_index")
+
+
+# -----------------------------------------------------------------------------
+# Load + Transform Annual CSV
+# -----------------------------------------------------------------------------
+def load_annual_csv(path="data/rent_index.csv") -> pd.DataFrame:
     df = pd.read_csv(path, low_memory=False)
     df.columns = [c.strip() for c in df.columns]
 
-    # Expected columns: REF_DATE, GEO, Type of structure, Type of unit, VALUE
-    df = df.rename(
-        columns={
-            "REF_DATE": "year",
-            "GEO": "city",
-            "Type of unit": "unit_type",
-            "VALUE": "value",
-        }
+    # Identify expected columns
+    ref = next(
+        (c for c in df.columns if "REF" in c.upper() or "YEAR" in c.upper()), None
+    )
+    geo = next(
+        (c for c in df.columns if c.upper() in ["GEO", "GEOGRAPHY", "CITY"]), None
+    )
+    unit = next((c for c in df.columns if "UNIT" in c.upper()), None)
+    val = next((c for c in df.columns if "VALUE" in c.upper()), None)
+
+    if not all([ref, geo, unit, val]):
+        raise ValueError("Missing required columns REF_DATE/GEO/Type of unit/VALUE")
+
+    df = df[[ref, geo, unit, val]].rename(
+        columns={ref: "year", geo: "city", unit: "unit_type", val: "rent_value"}
     )
 
-    # Normalize GEO field -> remove province names, "CMA of", etc.
+    # Clean city
     df["city"] = (
         df["city"]
         .astype(str)
         .str.replace("CMA of ", "", regex=False)
-        .str.replace(",.*", "", regex=True)  # remove everything after comma (province)
+        .str.replace(",.*", "", regex=True)
         .str.strip()
         .str.title()
     )
+    df = df[df["city"].isin(TARGET_CITIES)]
 
-    # Filter to target cities
-    target_cities = [
-        "Vancouver",
-        "Toronto",
-        "Montréal",
-        "Calgary",
-        "Edmonton",
-        "Ottawa",
-        "Winnipeg",
-        "Victoria",
-        "Kelowna",
-    ]
-    df = df[df["city"].isin(target_cities)]
+    # Year to date
+    df["year"] = df["year"].astype(str).str.extract(r"(\d{4})")[0]
+    df["date"] = pd.to_datetime(df["year"] + "-01-01", errors="coerce")
 
-    if df.empty:
-        print(
-            "[WARN] No matching cities found in rent_index.csv — please verify GEO names."
-        )
-        return pd.DataFrame()
+    # Numeric values
+    df["rent_value"] = pd.to_numeric(df["rent_value"], errors="coerce")
+    df = df.dropna(subset=["rent_value", "date"])
+    df = df[(df["rent_value"] > 0) & (df["rent_value"] < 10000)]
 
-    print(f"[DEBUG] Filtered cities: {sorted(df['city'].unique().tolist())}")
-
-    # Convert year to datetime (use July 1st of that year)
-    df["date"] = pd.to_datetime(df["year"].astype(str) + "-07-01")
-
-    # Map unit types to our target columns
-    mapping = {
-        "Bachelor units": "median_rent_apartment_0br",
-        "One bedroom units": "median_rent_apartment_1br",
-        "Two bedroom units": "median_rent_apartment_2br",
-        "Three bedroom units": "median_rent_apartment_3br",
-    }
-    df = df[df["unit_type"].isin(mapping.keys())]
-    df["unit_col"] = df["unit_type"].map(mapping)
-
-    # Aggregate duplicates by (city, date, unit_col)
-    df = df.groupby(["city", "date", "unit_col"], as_index=False)["value"].mean()
-
-    # Pivot to wide format
-    wide = df.pivot(
-        index=["city", "date"], columns="unit_col", values="value"
-    ).reset_index()
-
-    # Flatten multi-index columns
-    wide.columns.name = None
-    wide = wide.rename_axis(None, axis=1)
-
-    # Ensure all needed columns exist
-    for col in [
-        "median_rent_apartment_1br",
-        "median_rent_apartment_2br",
-        "median_rent_apartment_3br",
-    ]:
-        if col not in wide.columns:
-            wide[col] = None
-
-    # Compute index_value as mean across available bedrooms
-    wide["index_value"] = wide[
-        [
-            "median_rent_apartment_1br",
-            "median_rent_apartment_2br",
-            "median_rent_apartment_3br",
-        ]
-    ].mean(axis=1, skipna=True)
+    # Average across unit types → one value per city/year
+    agg = df.groupby(["city", "date"], as_index=False)["rent_value"].mean()
+    agg["data_flag"] = "ORIG_ANNUAL"
+    agg["source"] = "CMHC_Rental_Market_Survey_" + agg["date"].dt.year.astype(str)
+    agg["last_seen"] = pd.Timestamp.now()
 
     print(
-        f"[INFO] Loaded rent data for {wide['city'].nunique()} cities, {len(wide)} rows total."
+        f"[INFO] Annual city-level rows: {len(agg)} | Cities: {agg['city'].nunique()}"
     )
-    return wide
+    return agg
 
 
-# --------------------------------------------------------------------
-# Write to Postgres
-# --------------------------------------------------------------------
-def write_rent_index(df: pd.DataFrame):
-    """Upsert rent index data into public.rent_index."""
+# -----------------------------------------------------------------------------
+# Expand Annual → Monthly
+# -----------------------------------------------------------------------------
+def expand_to_monthly(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
-        print("[WARN] No rent index data to write.")
+        return df
+
+    months = pd.date_range("2005-01-01", "2025-08-01", freq="MS")
+    out_frames = []
+
+    for city, sub in df.groupby("city"):
+        sub = sub.sort_values("date")
+        year_map = {d.year: v for d, v in zip(sub["date"], sub["rent_value"])}
+
+        mf = pd.DataFrame({"date": months})
+        mf["city"] = city
+        mf["rent_value"] = mf["date"].dt.year.map(year_map)
+        mf["rent_value"] = mf["rent_value"].ffill()
+
+        # Flags
+        mf["data_flag"] = "DERIVED_ANNUAL"
+        mf["source"] = "CMHC_Rental_Market_Survey"
+        mf["last_seen"] = pd.Timestamp.now()
+
+        # LOCF for 2025
+        mask_2025 = (mf["date"] >= "2025-01-01") & (mf["date"] <= "2025-08-01")
+        mf.loc[mask_2025, "data_flag"] = "LOCF_FROM_2024"
+
+        out_frames.append(mf)
+
+    monthly = pd.concat(out_frames, ignore_index=True)
+    monthly = monthly[
+        (monthly["date"] >= "2005-01-01") & (monthly["date"] <= "2025-08-01")
+    ]
+    print(f"[INFO] Expanded monthly rows: {len(monthly)}")
+    return monthly
+
+
+# -----------------------------------------------------------------------------
+# Write to DB
+# -----------------------------------------------------------------------------
+def write_rent_index(df: pd.DataFrame, engine):
+    if df.empty:
+        print("[WARN] No rent data to write.")
         return
 
-    engine = get_engine()
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.date
+    df["rent_value"] = pd.to_numeric(df["rent_value"], errors="coerce")
+
+    chunk = 200
+    total = len(df)
+    print(f"[DEBUG] Writing {total} rows to public.rent_index in chunks of {chunk}...")
+    start = 0
     with engine.begin() as conn:
-        for _, row in df.iterrows():
-            conn.execute(
-                text("""
-                INSERT INTO public.rent_index 
-                (date, city, index_value,
-                 median_rent_apartment_1br, median_rent_apartment_2br, median_rent_apartment_3br,
-                 active_rental_count, avg_rental_days)
-                VALUES (:date, :city, :index_value, :r1, :r2, :r3, NULL, NULL)
-                ON CONFLICT (date, city) DO UPDATE
-                SET index_value = EXCLUDED.index_value,
-                    median_rent_apartment_1br = EXCLUDED.median_rent_apartment_1br,
-                    median_rent_apartment_2br = EXCLUDED.median_rent_apartment_2br,
-                    median_rent_apartment_3br = EXCLUDED.median_rent_apartment_3br;
-                """),
-                {
-                    "date": row["date"],
-                    "city": row["city"],
-                    "index_value": float(row["index_value"])
-                    if pd.notna(row["index_value"])
-                    else None,
-                    "r1": float(row.get("median_rent_apartment_1br", None))
-                    if pd.notna(row.get("median_rent_apartment_1br", None))
-                    else None,
-                    "r2": float(row.get("median_rent_apartment_2br", None))
-                    if pd.notna(row.get("median_rent_apartment_2br", None))
-                    else None,
-                    "r3": float(row.get("median_rent_apartment_3br", None))
-                    if pd.notna(row.get("median_rent_apartment_3br", None))
-                    else None,
-                },
+        while start < total:
+            batch = df.iloc[start : start + chunk]
+            batch.to_sql(
+                "rent_index",
+                con=conn,
+                schema="public",
+                if_exists="append",
+                index=False,
+                method="multi",
+                chunksize=None,
             )
-    print(f"[OK] Inserted or updated {len(df)} rent_index rows.")
+            print(f"  ↳ Inserted rows {start}..{start + len(batch) - 1}")
+            start += len(batch)
+
+    print(f"[OK] Inserted all {total} rows into public.rent_index.")
 
 
-# --------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Entrypoint
-# --------------------------------------------------------------------
-def run():
-    df = load_rent_csv()
-    write_rent_index(df)
-    print("[DONE] rent_index ETL from CSV complete.")
-
-
+# -----------------------------------------------------------------------------
 if __name__ == "__main__":
-    run()
+    recreate_rent_index_table(engine)
+    annual = load_annual_csv("data/rent_index.csv")
+    monthly = expand_to_monthly(annual)
+    write_rent_index(monthly, engine)
+    print("[DONE] rent_index ETL completed.")
