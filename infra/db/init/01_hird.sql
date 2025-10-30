@@ -176,26 +176,38 @@ CREATE TABLE IF NOT EXISTS public.demographics (
     city                VARCHAR(100) NOT NULL,
     population          INTEGER,
     migration_rate      NUMERIC(6,2),          -- percentage or per-1000 rate
-    age_25_34_perc      NUMERIC(5,2),          -- share of population age 25–34
     median_income       NUMERIC(12,2),         -- median household income
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (date, city)
 );
 
 
--- -----------------------------------------------------------------------------
--- Macro-Economic & Contextual Tables
--- -----------------------------------------------------------------------------
-DROP TABLE IF EXISTS public.macro_economic_data CASCADE;
+-- ------------------------------------------------------------
+-- Migration: V4__macro_economic_data.sql
+-- Purpose : Create table for GDP growth and CPI YoY
+-- ------------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS public.macro_economic_data (
-    date                DATE,
-    city            VARCHAR(100),
-    unemployment_rate   DECIMAL(5, 2),
-    gdp_growth_rate     DECIMAL(5, 2),
-    prime_lending_rate  DECIMAL(5, 2),
-    housing_starts      INTEGER,
-    PRIMARY KEY (date, province)
+    date DATE NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    gdp_growth NUMERIC(6,3),
+    cpi_yoy NUMERIC(6,3),
+    source TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (date, city)
 );
+
+-- Optional index to speed up joins by date
+CREATE INDEX IF NOT EXISTS idx_macro_data_date_city
+    ON public.macro_economic_data (date, city);
+
+COMMENT ON TABLE public.macro_economic_data IS
+    'Monthly macroeconomic indicators (GDP growth %, CPI YoY %) per city, 2005–2025.';
+COMMENT ON COLUMN public.macro_economic_data.gdp_growth IS
+    'Monthly real GDP growth rate (%, broadcasted from national or provincial data).';
+COMMENT ON COLUMN public.macro_economic_data.cpi_yoy IS
+    'Consumer Price Index year-over-year inflation rate (%), broadcasted from provincial CPI.';
+
 
 
 CREATE TABLE IF NOT EXISTS public.news_sentiment (
