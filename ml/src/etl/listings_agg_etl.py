@@ -1,9 +1,9 @@
 """
 ETL: Aggregate monthly housing listings (from listings_raw)
-Source: public.listings_raw
-Target: public.listings
+Source : public.listings_raw
+Target : public.listings
 
-Creates monthly aggregates by (date, city):
+Aggregates by (date, city):
 - listings_count: total listings (rent + sale)
 - new_listings: listings with type 'sale'
 - sales_to_listings_ratio: sale listings / total
@@ -12,8 +12,8 @@ Creates monthly aggregates by (date, city):
 from dotenv import load_dotenv, find_dotenv
 from sqlalchemy import create_engine, text
 from datetime import datetime
-import os
 import pandas as pd
+import os
 
 # ---------------------------------------------------------------------
 # 1. Load environment and connect to Neon
@@ -33,7 +33,7 @@ def load_raw_listings() -> pd.DataFrame:
     query = """
         SELECT city, date_posted::date AS date_posted, listing_type, price
         FROM public.listings_raw
-        WHERE price IS NOT NULL AND city IS NOT NULL
+        WHERE price IS NOT NULL AND city IS NOT NULL;
     """
     df = pd.read_sql_query(query, engine)
     print(f"[INFO] Loaded {len(df):,} listings_raw rows from database")
@@ -44,10 +44,20 @@ def load_raw_listings() -> pd.DataFrame:
 # 3. Transform → monthly aggregates
 # ---------------------------------------------------------------------
 def transform(df: pd.DataFrame) -> pd.DataFrame:
-    # Normalize to month start
-    df["date"] = pd.to_datetime(df["date_posted"]).dt.to_period("M").dt.to_timestamp()
-    df = df.drop(columns=["date_posted"])
+    if df.empty:
+        print("[WARN] No listings_raw data found — skipping aggregation.")
+        return pd.DataFrame(
+            columns=[
+                "date", "city", "listings_count",
+                "new_listings", "sales_to_listings_ratio", "source"
+            ]
+        )
 
+    # Normalize to month start
+    df["date"] = pd.to_datetime(df["date_posted"], errors="coerce").dt.to_period("M").dt.to_timestamp()
+    df = df.drop(columns=["date_posted"]).dropna(subset=["date", "city"])
+
+    # Group by city and month
     agg = (
         df.groupby(["date", "city"])
         .agg(
@@ -57,8 +67,9 @@ def transform(df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
 
+    # Compute ratio safely
     agg["sales_to_listings_ratio"] = (
-        agg["new_listings"] / agg["listings_count"]
+        agg["new_listings"].astype(float) / agg["listings_count"].astype(float)
     ).round(3)
     agg["source"] = "ETL_listings_agg_v1"
 
@@ -88,9 +99,13 @@ def create_target_table():
 
 
 # ---------------------------------------------------------------------
-# 5. Upsert to database
+# 5. Upsert into database (batched)
 # ---------------------------------------------------------------------
-def upsert_listings(df: pd.DataFrame):
+def upsert_listings(df: pd.DataFrame, batch_size: int = 500):
+    if df.empty:
+        print("[WARN] No data to upsert — skipping database write.")
+        return
+
     upsert_sql = text("""
         INSERT INTO public.listings (date, city, listings_count, new_listings, sales_to_listings_ratio, source, created_at)
         VALUES (:date, :city, :listings_count, :new_listings, :sales_to_listings_ratio, :source, NOW())
@@ -102,9 +117,16 @@ def upsert_listings(df: pd.DataFrame):
             source = EXCLUDED.source,
             created_at = NOW();
     """)
+
+    total = len(df)
     with engine.begin() as conn:
-        conn.execute(upsert_sql, df.to_dict(orient="records"))
-    print(f"[OK] Upserted {len(df):,} rows into public.listings")
+        for start in range(0, total, batch_size):
+            end = start + batch_size
+            chunk = df.iloc[start:end]
+            conn.execute(upsert_sql, chunk.to_dict(orient="records"))
+            print(f"[DEBUG] Upserted {min(end, total)}/{total} rows...")
+
+    print(f"[OK] Upserted {total:,} rows into public.listings")
 
 
 # ---------------------------------------------------------------------
