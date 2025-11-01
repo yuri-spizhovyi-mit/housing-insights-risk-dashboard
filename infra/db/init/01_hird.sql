@@ -114,6 +114,31 @@ COMMENT ON COLUMN public.rent_index.last_seen IS
     'Timestamp of ETL load or update.';
 
 -- -----------------------------------------------------------------------------
+-- Table: public.demographics
+-- Purpose: Store demographic data for each city and date.
+-- Frequency: Monthly (YYYY-MM-01)
+-- Grain: One observation per (date, city)
+-- -----------------------------------------------------------------------------
+-- Data Source(s):
+--   • Statistics Canada     – Population, migration, and income data
+--   • Internal CSV/ETL      – Optional additional metrics
+-- -----------------------------------------------------------------------------
+-- Schema Reference: Data_ETL Section 2.4 — Destination Table
+-- -----------------------------------------------------------------------------
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.demographics (
+    date                DATE NOT NULL,
+    city                VARCHAR(100) NOT NULL,
+    population          INTEGER,
+    migration_rate      NUMERIC(6,2),          -- percentage or per-1000 rate
+    median_income       NUMERIC(12,2),         -- median household income
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (date, city)
+);
+    
+
+-- -----------------------------------------------------------------------------
 -- Raw Data Tables
 -- These tables are the initial "dump" from data collection.
 -- -----------------------------------------------------------------------------
@@ -137,6 +162,53 @@ CREATE TABLE IF NOT EXISTS public.listings_raw (
 -- Index for efficient lookup by postal code and city
 CREATE INDEX IF NOT EXISTS idx_listings_raw_geo
 ON public.listings_raw (city, postal_code);
+
+
+
+-- ------------------------------------------------------------
+-- Migration: V5__create_features_table.sql
+-- Purpose: Central feature store for housing models
+-- ------------------------------------------------------------
+
+DROP TABLE IF EXISTS public.features CASCADE;
+
+CREATE TABLE public.features (
+    date DATE NOT NULL,
+    city TEXT NOT NULL,
+
+    -- Housing data
+    hpi_benchmark NUMERIC(14,2),
+    hpi_change_yoy NUMERIC(6,3),
+    rent_avg_city NUMERIC(14,2),
+    rent_change_yoy NUMERIC(6,3),
+
+    -- Economic metrics
+    mortgage_rate NUMERIC(6,3),
+    unemployment_rate NUMERIC(6,3),
+    overnight_rate NUMERIC(6,3),
+
+    -- Demographics
+    population BIGINT,
+    median_income NUMERIC(14,2),
+
+    -- Listings
+    listings_count INT,
+    new_listings INT,
+    sales_to_listings_ratio NUMERIC(6,3),
+
+    -- Macro context
+    gdp_growth NUMERIC(6,3),
+    cpi_yoy NUMERIC(6,3),
+
+    -- Metadata
+    source TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (date, city)
+);
+
+COMMENT ON TABLE public.features IS
+    'Aggregated feature store combining housing, economic, demographic, and macro data by city and month.';
+
 
 -- -----------------------------------------------------------------------------
 -- Serving-layer predictions cache
@@ -171,15 +243,6 @@ ON public.model_predictions (city, target, horizon_months, predict_date);
 
 
 
-CREATE TABLE IF NOT EXISTS public.demographics (
-    date                DATE NOT NULL,
-    city                VARCHAR(100) NOT NULL,
-    population          INTEGER,
-    migration_rate      NUMERIC(6,2),          -- percentage or per-1000 rate
-    median_income       NUMERIC(12,2),         -- median household income
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (date, city)
-);
 
 
 -- ------------------------------------------------------------
