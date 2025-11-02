@@ -30,3 +30,4 @@ stop-minio.ps1
 _debug/
 .cache/
 infra/db/backups/
+ml/src/etl/*.csv 

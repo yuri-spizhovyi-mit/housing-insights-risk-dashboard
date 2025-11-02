@@ -33,6 +33,7 @@ if not NEON_DATABASE_URL:
 engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
 print("[DEBUG] Connected to Neon via .env")
 
+
 # ---------------------------------------------------------------------
 # 2. Load all source tables into DataFrames
 # ---------------------------------------------------------------------
@@ -46,6 +47,7 @@ def load_table(table_name: str, columns: str = "*") -> pd.DataFrame:
         print(f"[WARN] Failed to load {table_name}: {e}")
         return pd.DataFrame()
 
+
 # ---------------------------------------------------------------------
 # 3. Transform and merge datasets
 # ---------------------------------------------------------------------
@@ -53,10 +55,14 @@ def build_features():
     # Load data
     hpi = load_table("house_price_index", "date, city, hpi_benchmark, hpi_change_yoy")
     rent = load_table("rent_index", "date, city, rent_avg_city, rent_change_yoy")
-    metrics = load_table("metrics", "date, city, mortgage_rate, unemployment_rate, overnight_rate")
+    metrics = load_table(
+        "metrics", "date, city, mortgage_rate, unemployment_rate, overnight_rate"
+    )
     demo = load_table("demographics", "date, city, population, median_income")
     macro = load_table("macro_economic_data", "date, city, gdp_growth, cpi_yoy")
-    listings = load_table("listings", "date, city, listings_count, new_listings, sales_to_listings_ratio")
+    listings = load_table(
+        "listings", "date, city, listings_count, new_listings, sales_to_listings_ratio"
+    )
 
     # Standardize types
     for df in [hpi, rent, metrics, demo, macro, listings]:
@@ -65,9 +71,20 @@ def build_features():
             df["city"] = df["city"].astype(str)
 
     # Base frame of all months × all cities
-    cities = ["Victoria", "Vancouver", "Calgary", "Edmonton", "Winnipeg", "Ottawa", "Toronto", "Montreal"]
+    cities = [
+        "Victoria",
+        "Vancouver",
+        "Calgary",
+        "Edmonton",
+        "Winnipeg",
+        "Ottawa",
+        "Toronto",
+        "Montreal",
+    ]
     all_months = pd.date_range("2005-01-01", "2025-08-01", freq="MS")
-    base = pd.MultiIndex.from_product([all_months, cities], names=["date", "city"]).to_frame(index=False)
+    base = pd.MultiIndex.from_product(
+        [all_months, cities], names=["date", "city"]
+    ).to_frame(index=False)
     print(f"[INFO] Base grid created: {len(base):,} (months × cities)")
 
     # Merge everything on (date, city)
