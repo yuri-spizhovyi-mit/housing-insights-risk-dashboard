@@ -7,7 +7,7 @@ Sources:
 - public.metrics
 - public.demographics
 - public.macro_economic_data
-- public.listings
+(Listings table disabled until populated)
 
 Output: public.features
 Grain: (date, city)
@@ -21,7 +21,7 @@ import pandas as pd
 import os
 
 # ---------------------------------------------------------------------
-# 1. Environment
+# 1. Environment setup
 # ---------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
 NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL")
@@ -31,7 +31,7 @@ engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
 print("[DEBUG] Connected to Neon via .env")
 
 # ---------------------------------------------------------------------
-# 2. Load helper
+# 2. Helper to load tables
 # ---------------------------------------------------------------------
 def load_table(table_name: str, columns: str = "*") -> pd.DataFrame:
     query = f"SELECT {columns} FROM public.{table_name};"
@@ -44,24 +44,23 @@ def load_table(table_name: str, columns: str = "*") -> pd.DataFrame:
         return pd.DataFrame()
 
 # ---------------------------------------------------------------------
-# 3. Transform + merge
+# 3. Transform and merge
 # ---------------------------------------------------------------------
 def build_features():
-    # Load raw tables
+    # Load sources
     hpi = load_table("house_price_index", "date, city, benchmark_price")
     rent = load_table("rent_index", "date, city, rent_value")
     metrics = load_table("metrics", "date, city, metric, value")
     demo = load_table("demographics", "date, city, population, median_income")
     macro = load_table("macro_economic_data", "date, city, gdp_growth, cpi_yoy")
-    listings = load_table("listings", "date, city, listings_count, new_listings, sales_to_listings_ratio")
 
-    # --- rename HPI and rent ---
+    # Rename columns
     if not hpi.empty:
         hpi.rename(columns={"benchmark_price": "hpi_benchmark"}, inplace=True)
     if not rent.empty:
         rent.rename(columns={"rent_value": "rent_avg_city"}, inplace=True)
 
-    # --- pivot metrics ---
+    # Pivot metrics to wide format
     if not metrics.empty:
         metrics_wide = metrics.pivot_table(
             index=["date", "city"],
@@ -75,29 +74,21 @@ def build_features():
     else:
         metrics = pd.DataFrame(columns=["date", "city"])
 
-    # --- date + city normalization ---
-    for df in [hpi, rent, metrics, demo, macro, listings]:
+    # Normalize date/city
+    for df in [hpi, rent, metrics, demo, macro]:
         if not df.empty:
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
             df["city"] = df["city"].astype(str)
 
-    # --- base grid ---
+    # Base grid
     cities = ["Victoria", "Vancouver", "Calgary", "Edmonton", "Winnipeg", "Ottawa", "Toronto", "Montreal"]
     all_months = pd.date_range("2005-01-01", "2025-08-01", freq="MS")
     base = pd.MultiIndex.from_product([all_months, cities], names=["date", "city"]).to_frame(index=False)
     print(f"[INFO] Base grid created: {len(base):,} rows (months × cities)")
 
-    # --- join everything ---
+    # Merge all datasets
     df = base.copy()
-    sources = {
-        "hpi": hpi,
-        "rent": rent,
-        "metrics": metrics,
-        "demo": demo,
-        "macro": macro,
-        "listings": listings
-    }
-
+    sources = {"hpi": hpi, "rent": rent, "metrics": metrics, "demo": demo, "macro": macro}
     for name, src in sources.items():
         if not src.empty and all(col in src.columns for col in ["date", "city"]):
             df = df.merge(src, on=["date", "city"], how="left")
@@ -105,16 +96,16 @@ def build_features():
         else:
             print(f"[WARN] Skipped {name} — empty or missing date/city.")
 
-    df["source"] = "features_build_etl_v2"
+    df["source"] = "features_build_etl_v3"
     print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
     return df
 
 # ---------------------------------------------------------------------
-# 4. Upsert
+# 4. Upsert to public.features (listings columns removed)
 # ---------------------------------------------------------------------
 def upsert_features(df: pd.DataFrame, batch_size: int = 500):
     if df.empty:
-        print("[WARN] No data to upsert — skipping write.")
+        print("[WARN] No data to upsert — skipping database write.")
         return
 
     upsert_sql = text("""
@@ -123,7 +114,6 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
             hpi_benchmark, rent_avg_city,
             mortgage_rate, unemployment_rate, overnight_rate,
             population, median_income,
-            listings_count, new_listings, sales_to_listings_ratio,
             gdp_growth, cpi_yoy,
             source, created_at
         )
@@ -132,7 +122,6 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
             :hpi_benchmark, :rent_avg_city,
             :mortgage_rate, :unemployment_rate, :overnight_rate,
             :population, :median_income,
-            :listings_count, :new_listings, :sales_to_listings_ratio,
             :gdp_growth, :cpi_yoy,
             :source, NOW()
         )
@@ -145,9 +134,6 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
             overnight_rate = EXCLUDED.overnight_rate,
             population = EXCLUDED.population,
             median_income = EXCLUDED.median_income,
-            listings_count = EXCLUDED.listings_count,
-            new_listings = EXCLUDED.new_listings,
-            sales_to_listings_ratio = EXCLUDED.sales_to_listings_ratio,
             gdp_growth = EXCLUDED.gdp_growth,
             cpi_yoy = EXCLUDED.cpi_yoy,
             source = EXCLUDED.source,
