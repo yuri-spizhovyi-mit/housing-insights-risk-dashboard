@@ -7,7 +7,6 @@ Sources:
 - public.metrics
 - public.demographics
 - public.macro_economic_data
-(Listings table disabled until populated)
 
 Output: public.features
 Grain: (date, city)
@@ -24,9 +23,10 @@ import os
 # 1. Environment setup
 # ---------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL")
+NEON_DATABASE_URL = os.getenv("DATABASE_URL")
 if not NEON_DATABASE_URL:
     raise RuntimeError("NEON_DATABASE_URL not found in .env")
+
 engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
 print("[DEBUG] Connected to Neon via .env")
 
@@ -47,7 +47,7 @@ def load_table(table_name: str, columns: str = "*") -> pd.DataFrame:
 # 3. Transform and merge
 # ---------------------------------------------------------------------
 def build_features():
-    # Load sources
+    # Load source tables
     hpi = load_table("house_price_index", "date, city, benchmark_price")
     rent = load_table("rent_index", "date, city, rent_value")
     metrics = load_table("metrics", "date, city, metric, value")
@@ -60,7 +60,7 @@ def build_features():
     if not rent.empty:
         rent.rename(columns={"rent_value": "rent_avg_city"}, inplace=True)
 
-    # Pivot metrics to wide format
+    # Pivot metrics table (metric → columns)
     if not metrics.empty:
         metrics_wide = metrics.pivot_table(
             index=["date", "city"],
@@ -74,13 +74,13 @@ def build_features():
     else:
         metrics = pd.DataFrame(columns=["date", "city"])
 
-    # Normalize date/city
+    # Normalize dates and city names
     for df in [hpi, rent, metrics, demo, macro]:
         if not df.empty:
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
             df["city"] = df["city"].astype(str)
 
-    # Base grid
+    # Build full date-city grid
     cities = ["Victoria", "Vancouver", "Calgary", "Edmonton", "Winnipeg", "Ottawa", "Toronto", "Montreal"]
     all_months = pd.date_range("2005-01-01", "2025-08-01", freq="MS")
     base = pd.MultiIndex.from_product([all_months, cities], names=["date", "city"]).to_frame(index=False)
@@ -96,12 +96,23 @@ def build_features():
         else:
             print(f"[WARN] Skipped {name} — empty or missing date/city.")
 
-    df["source"] = "features_build_etl_v3"
+    # -----------------------------------------------------------------
+    # Sanitize numeric columns to avoid overflow (BIGINT / NUMERIC)
+    # -----------------------------------------------------------------
+    for col in ["population", "median_income", "hpi_benchmark"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    if "population" in df.columns:
+        df["population"] = df["population"].astype("Int64")
+
+    print("[DEBUG] Numeric sanitization complete.")
+    df["source"] = "features_build_etl_v4"
     print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
     return df
 
 # ---------------------------------------------------------------------
-# 4. Upsert to public.features (listings columns removed)
+# 4. Upsert into public.features
 # ---------------------------------------------------------------------
 def upsert_features(df: pd.DataFrame, batch_size: int = 500):
     if df.empty:
