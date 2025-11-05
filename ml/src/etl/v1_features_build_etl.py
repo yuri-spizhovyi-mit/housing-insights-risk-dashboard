@@ -4,7 +4,7 @@ ETL: Build unified features table for housing models
 Sources:
 - public.house_price_index
 - public.rent_index
-- public.metrics (broadcasts national rows)
+- public.metrics
 - public.demographics
 - public.macro_economic_data
 
@@ -60,16 +60,6 @@ def build_features():
     if not rent.empty:
         rent.rename(columns={"rent_value": "rent_avg_city"}, inplace=True)
 
-    # Broadcast national ("Canada") metrics to all cities
-    if not metrics.empty:
-        cities = ["Victoria", "Vancouver", "Calgary", "Edmonton",
-                  "Winnipeg", "Ottawa", "Toronto", "Montreal"]
-        national = metrics[metrics["city"].str.lower() == "canada"]
-        if not national.empty:
-            expanded = pd.concat([national.assign(city=c) for c in cities], ignore_index=True)
-            metrics = pd.concat([metrics, expanded], ignore_index=True)
-            print(f"[INFO] Broadcasted {len(national)} national metric rows to {len(cities)} cities.")
-
     # Pivot metrics table (metric → columns)
     if not metrics.empty:
         metrics_wide = metrics.pivot_table(
@@ -91,8 +81,7 @@ def build_features():
             df["city"] = df["city"].astype(str)
 
     # Build full date-city grid
-    cities = ["Victoria", "Vancouver", "Calgary", "Edmonton",
-              "Winnipeg", "Ottawa", "Toronto", "Montreal"]
+    cities = ["Victoria", "Vancouver", "Calgary", "Edmonton", "Winnipeg", "Ottawa", "Toronto", "Montreal"]
     all_months = pd.date_range("2005-01-01", "2025-08-01", freq="MS")
     base = pd.MultiIndex.from_product([all_months, cities], names=["date", "city"]).to_frame(index=False)
     print(f"[INFO] Base grid created: {len(base):,} rows (months × cities)")
@@ -107,7 +96,9 @@ def build_features():
         else:
             print(f"[WARN] Skipped {name} — empty or missing date/city.")
 
-    # Sanitize numeric columns
+    # -----------------------------------------------------------------
+    # Sanitize numeric columns to avoid overflow (BIGINT / NUMERIC)
+    # -----------------------------------------------------------------
     for col in ["population", "median_income", "hpi_benchmark"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -116,7 +107,7 @@ def build_features():
         df["population"] = df["population"].astype("Int64")
 
     print("[DEBUG] Numeric sanitization complete.")
-    df["source"] = "features_build_etl_v5"
+    df["source"] = "features_build_etl_v4"
     print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
     return df
 
