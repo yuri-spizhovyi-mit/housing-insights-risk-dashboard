@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 # Load environment variables
 # --------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL")
+NEON_DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not NEON_DATABASE_URL:
     raise RuntimeError("NEON_DATABASE_URL not found in .env")
