@@ -6,7 +6,7 @@ Sources:
 - public.rent_index
 - public.metrics (broadcasts national rows)
 - public.demographics
-- public.macro_economic_data
+- public.macro_economic_data (broadcasts national rows)
 
 Output: public.features
 Grain: (date, city)
@@ -60,15 +60,29 @@ def build_features():
     if not rent.empty:
         rent.rename(columns={"rent_value": "rent_avg_city"}, inplace=True)
 
-    # Broadcast national ("Canada") metrics to all cities
-    if not metrics.empty:
-        cities = ["Victoria", "Vancouver", "Calgary", "Edmonton",
-                  "Winnipeg", "Ottawa", "Toronto", "Montreal"]
-        national = metrics[metrics["city"].str.lower() == "canada"]
-        if not national.empty:
-            expanded = pd.concat([national.assign(city=c) for c in cities], ignore_index=True)
-            metrics = pd.concat([metrics, expanded], ignore_index=True)
-            print(f"[INFO] Broadcasted {len(national)} national metric rows to {len(cities)} cities.")
+    # Cities reference
+    cities = [
+        "Victoria", "Vancouver", "Calgary", "Edmonton",
+        "Winnipeg", "Ottawa", "Toronto", "Montreal"
+    ]
+
+    # -----------------------------------------------------------------
+    # Broadcast national ("Canada") rows to all cities
+    # -----------------------------------------------------------------
+    def broadcast_national(df: pd.DataFrame, label: str):
+        if df.empty or "city" not in df.columns:
+            return df
+        national = df[df["city"].str.lower() == "canada"]
+        if national.empty:
+            print(f"[INFO] No national rows to broadcast for {label}")
+            return df
+        expanded = pd.concat([national.assign(city=c) for c in cities], ignore_index=True)
+        df = pd.concat([df, expanded], ignore_index=True)
+        print(f"[INFO] Broadcasted {len(national)} national {label} rows to {len(cities)} cities.")
+        return df
+
+    metrics = broadcast_national(metrics, "metrics")
+    macro = broadcast_national(macro, "macro_economic_data")
 
     # Pivot metrics table (metric → columns)
     if not metrics.empty:
@@ -91,8 +105,6 @@ def build_features():
             df["city"] = df["city"].astype(str)
 
     # Build full date-city grid
-    cities = ["Victoria", "Vancouver", "Calgary", "Edmonton",
-              "Winnipeg", "Ottawa", "Toronto", "Montreal"]
     all_months = pd.date_range("2005-01-01", "2025-08-01", freq="MS")
     base = pd.MultiIndex.from_product([all_months, cities], names=["date", "city"]).to_frame(index=False)
     print(f"[INFO] Base grid created: {len(base):,} rows (months × cities)")
@@ -111,22 +123,32 @@ def build_features():
     for col in ["population", "median_income", "hpi_benchmark"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-
     if "population" in df.columns:
         df["population"] = df["population"].astype("Int64")
 
-    print("[DEBUG] Numeric sanitization complete.")
-    df["source"] = "features_build_etl_v5"
+    df["source"] = "features_build_etl_v6"
     print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
     return df
 
 # ---------------------------------------------------------------------
-# 4. Upsert into public.features
+# 4. Upsert into public.features (safe defaults for missing cols)
 # ---------------------------------------------------------------------
 def upsert_features(df: pd.DataFrame, batch_size: int = 500):
     if df.empty:
         print("[WARN] No data to upsert — skipping database write.")
         return
+
+    expected_cols = [
+        "date", "city",
+        "hpi_benchmark", "rent_avg_city",
+        "mortgage_rate", "unemployment_rate", "overnight_rate",
+        "population", "median_income",
+        "gdp_growth", "cpi_yoy", "source"
+    ]
+    for col in expected_cols:
+        if col not in df.columns:
+            df[col] = None
+    df = df.where(pd.notnull(df), None)
 
     upsert_sql = text("""
         INSERT INTO public.features (
