@@ -5,7 +5,7 @@ Sources:
 - public.house_price_index
 - public.rent_index
 - public.metrics (broadcasts national rows)
-- public.demographics (adds migration_rate)
+- public.demographics
 - public.macro_economic_data (broadcasts national rows)
 
 Output: public.features
@@ -23,7 +23,7 @@ import os
 # 1. Environment setup
 # ---------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL")
+NEON_DATABASE_URL = os.getenv("DATABASE_URL")
 if not NEON_DATABASE_URL:
     raise RuntimeError("NEON_DATABASE_URL not found in .env")
 
@@ -51,7 +51,7 @@ def build_features():
     hpi = load_table("house_price_index", "date, city, benchmark_price")
     rent = load_table("rent_index", "date, city, rent_value")
     metrics = load_table("metrics", "date, city, metric, value")
-    demo = load_table("demographics", "date, city, population, migration_rate, median_income")
+    demo = load_table("demographics", "date, city, population, median_income")
     macro = load_table("macro_economic_data", "date, city, gdp_growth, cpi_yoy")
 
     # Rename columns
@@ -60,7 +60,7 @@ def build_features():
     if not rent.empty:
         rent.rename(columns={"rent_value": "rent_avg_city"}, inplace=True)
 
-    # City reference list
+    # Cities reference
     cities = [
         "Victoria", "Vancouver", "Calgary", "Edmonton",
         "Winnipeg", "Ottawa", "Toronto", "Montreal"
@@ -84,7 +84,7 @@ def build_features():
     metrics = broadcast_national(metrics, "metrics")
     macro = broadcast_national(macro, "macro_economic_data")
 
-    # Pivot metrics (metric → columns)
+    # Pivot metrics table (metric → columns)
     if not metrics.empty:
         metrics_wide = metrics.pivot_table(
             index=["date", "city"],
@@ -98,13 +98,13 @@ def build_features():
     else:
         metrics = pd.DataFrame(columns=["date", "city"])
 
-    # Normalize date & city
+    # Normalize dates and city names
     for df in [hpi, rent, metrics, demo, macro]:
         if not df.empty:
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
             df["city"] = df["city"].astype(str)
 
-    # Build monthly date-city grid
+    # Build full date-city grid
     all_months = pd.date_range("2005-01-01", "2025-08-01", freq="MS")
     base = pd.MultiIndex.from_product([all_months, cities], names=["date", "city"]).to_frame(index=False)
     print(f"[INFO] Base grid created: {len(base):,} rows (months × cities)")
@@ -120,18 +120,18 @@ def build_features():
             print(f"[WARN] Skipped {name} — empty or missing date/city.")
 
     # Sanitize numeric columns
-    for col in ["population", "median_income", "migration_rate", "hpi_benchmark"]:
+    for col in ["population", "median_income", "hpi_benchmark"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     if "population" in df.columns:
         df["population"] = df["population"].astype("Int64")
 
-    df["source"] = "features_build_etl_v7"
+    df["source"] = "features_build_etl_v6"
     print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
     return df
 
 # ---------------------------------------------------------------------
-# 4. Upsert (safe defaults for missing columns)
+# 4. Upsert into public.features (safe defaults for missing cols)
 # ---------------------------------------------------------------------
 def upsert_features(df: pd.DataFrame, batch_size: int = 500):
     if df.empty:
@@ -142,7 +142,7 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
         "date", "city",
         "hpi_benchmark", "rent_avg_city",
         "mortgage_rate", "unemployment_rate", "overnight_rate",
-        "population", "migration_rate", "median_income",
+        "population", "median_income",
         "gdp_growth", "cpi_yoy", "source"
     ]
     for col in expected_cols:
@@ -155,7 +155,7 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
             date, city,
             hpi_benchmark, rent_avg_city,
             mortgage_rate, unemployment_rate, overnight_rate,
-            population, migration_rate, median_income,
+            population, median_income,
             gdp_growth, cpi_yoy,
             source, created_at
         )
@@ -163,7 +163,7 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
             :date, :city,
             :hpi_benchmark, :rent_avg_city,
             :mortgage_rate, :unemployment_rate, :overnight_rate,
-            :population, :migration_rate, :median_income,
+            :population, :median_income,
             :gdp_growth, :cpi_yoy,
             :source, NOW()
         )
@@ -175,7 +175,6 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
             unemployment_rate = EXCLUDED.unemployment_rate,
             overnight_rate = EXCLUDED.overnight_rate,
             population = EXCLUDED.population,
-            migration_rate = EXCLUDED.migration_rate,
             median_income = EXCLUDED.median_income,
             gdp_growth = EXCLUDED.gdp_growth,
             cpi_yoy = EXCLUDED.cpi_yoy,
