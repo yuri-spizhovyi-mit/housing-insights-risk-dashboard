@@ -1,8 +1,16 @@
 """
-ETL: Build unified features table for housing models (v8)
-----------------------------------------------------------
-Adds automatic computation of hpi_change_yoy and rent_change_yoy
-and writes them into public.features table.
+ETL: Build unified features table for housing models
+----------------------------------------------------
+Sources:
+- public.house_price_index
+- public.rent_index
+- public.metrics (broadcasts national rows)
+- public.demographics (adds migration_rate)
+- public.macro_economic_data (broadcasts national rows)
+
+Output: public.features
+Grain: (date, city)
+Range: 2005-01-01 → 2025-08-01
 """
 
 from dotenv import load_dotenv, find_dotenv
@@ -15,7 +23,7 @@ import os
 # 1. Environment setup
 # ---------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
+NEON_DATABASE_URL = os.getenv("DATABASE_URL")
 if not NEON_DATABASE_URL:
     raise RuntimeError("NEON_DATABASE_URL not found in .env")
 
@@ -118,9 +126,10 @@ def build_features():
     if "population" in df.columns:
         df["population"] = df["population"].astype("Int64")
 
-    # -----------------------------------------------------------------
-    # Derived metrics (year-over-year % change)
-    # -----------------------------------------------------------------
+    df["source"] = "features_build_etl_v7"
+    print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
+
+    # After all merges, before return
     if "hpi_benchmark" in df.columns:
         df["hpi_change_yoy"] = (
             df.groupby("city")["hpi_benchmark"]
@@ -134,13 +143,10 @@ def build_features():
             .apply(lambda s: s.pct_change(12) * 100)
             .reset_index(level=0, drop=True)
         )
-
-    df["source"] = "features_build_etl"
-    print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
     return df
 
 # ---------------------------------------------------------------------
-# 4. Upsert (includes new YoY columns)
+# 4. Upsert (safe defaults for missing columns)
 # ---------------------------------------------------------------------
 def upsert_features(df: pd.DataFrame, batch_size: int = 500):
     if df.empty:
@@ -150,7 +156,6 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
     expected_cols = [
         "date", "city",
         "hpi_benchmark", "rent_avg_city",
-        "hpi_change_yoy", "rent_change_yoy",
         "mortgage_rate", "unemployment_rate", "overnight_rate",
         "population", "migration_rate", "median_income",
         "gdp_growth", "cpi_yoy", "source"
@@ -164,7 +169,6 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
         INSERT INTO public.features (
             date, city,
             hpi_benchmark, rent_avg_city,
-            hpi_change_yoy, rent_change_yoy,
             mortgage_rate, unemployment_rate, overnight_rate,
             population, migration_rate, median_income,
             gdp_growth, cpi_yoy,
@@ -173,7 +177,6 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
         VALUES (
             :date, :city,
             :hpi_benchmark, :rent_avg_city,
-            :hpi_change_yoy, :rent_change_yoy,
             :mortgage_rate, :unemployment_rate, :overnight_rate,
             :population, :migration_rate, :median_income,
             :gdp_growth, :cpi_yoy,
@@ -183,8 +186,6 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
         DO UPDATE SET
             hpi_benchmark = EXCLUDED.hpi_benchmark,
             rent_avg_city = EXCLUDED.rent_avg_city,
-            hpi_change_yoy = EXCLUDED.hpi_change_yoy,
-            rent_change_yoy = EXCLUDED.rent_change_yoy,
             mortgage_rate = EXCLUDED.mortgage_rate,
             unemployment_rate = EXCLUDED.unemployment_rate,
             overnight_rate = EXCLUDED.overnight_rate,
