@@ -20,3 +20,4 @@ feedparser==6.0.11
 lightgbm
 pyarrow
 fastparquet
+pmdarima
