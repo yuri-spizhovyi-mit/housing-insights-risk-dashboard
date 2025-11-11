@@ -1,16 +1,8 @@
 """
-ETL: Build unified features table for housing models
-----------------------------------------------------
-Sources:
-- public.house_price_index
-- public.rent_index
-- public.metrics (broadcasts national rows)
-- public.demographics (adds migration_rate)
-- public.macro_economic_data (broadcasts national rows)
-
-Output: public.features
-Grain: (date, city)
-Range: 2005-01-01 → 2025-08-01
+ETL: Build unified features table for housing models (v9)
+----------------------------------------------------------
+Adds automatic computation of hpi_change_yoy and rent_change_yoy,
+fills NaN values with 0, and optimizes Neon DB write with warm-up + larger batch size.
 """
 
 from dotenv import load_dotenv, find_dotenv
@@ -23,12 +15,18 @@ import os
 # 1. Environment setup
 # ---------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("DATABASE_URL")
+NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 if not NEON_DATABASE_URL:
     raise RuntimeError("NEON_DATABASE_URL not found in .env")
 
-engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
+engine = create_engine(
+    NEON_DATABASE_URL,
+    pool_pre_ping=True,
+    future=True,
+    connect_args={"options": "-c statement_timeout=60000"},
+)
 print("[DEBUG] Connected to Neon via .env")
+
 
 # ---------------------------------------------------------------------
 # 2. Helper to load tables
@@ -43,6 +41,7 @@ def load_table(table_name: str, columns: str = "*") -> pd.DataFrame:
         print(f"[WARN] Failed to load {table_name}: {e}")
         return pd.DataFrame()
 
+
 # ---------------------------------------------------------------------
 # 3. Transform and merge
 # ---------------------------------------------------------------------
@@ -51,7 +50,9 @@ def build_features():
     hpi = load_table("house_price_index", "date, city, benchmark_price")
     rent = load_table("rent_index", "date, city, rent_value")
     metrics = load_table("metrics", "date, city, metric, value")
-    demo = load_table("demographics", "date, city, population, migration_rate, median_income")
+    demo = load_table(
+        "demographics", "date, city, population, migration_rate, median_income"
+    )
     macro = load_table("macro_economic_data", "date, city, gdp_growth, cpi_yoy")
 
     # Rename columns
@@ -62,8 +63,14 @@ def build_features():
 
     # City reference list
     cities = [
-        "Victoria", "Vancouver", "Calgary", "Edmonton",
-        "Winnipeg", "Ottawa", "Toronto", "Montreal"
+        "Victoria",
+        "Vancouver",
+        "Calgary",
+        "Edmonton",
+        "Winnipeg",
+        "Ottawa",
+        "Toronto",
+        "Montreal",
     ]
 
     # -----------------------------------------------------------------
@@ -76,9 +83,13 @@ def build_features():
         if national.empty:
             print(f"[INFO] No national rows to broadcast for {label}")
             return df
-        expanded = pd.concat([national.assign(city=c) for c in cities], ignore_index=True)
+        expanded = pd.concat(
+            [national.assign(city=c) for c in cities], ignore_index=True
+        )
         df = pd.concat([df, expanded], ignore_index=True)
-        print(f"[INFO] Broadcasted {len(national)} national {label} rows to {len(cities)} cities.")
+        print(
+            f"[INFO] Broadcasted {len(national)} national {label} rows to {len(cities)} cities."
+        )
         return df
 
     metrics = broadcast_national(metrics, "metrics")
@@ -87,14 +98,11 @@ def build_features():
     # Pivot metrics (metric → columns)
     if not metrics.empty:
         metrics_wide = metrics.pivot_table(
-            index=["date", "city"],
-            columns="metric",
-            values="value",
-            aggfunc="first"
+            index=["date", "city"], columns="metric", values="value", aggfunc="first"
         ).reset_index()
         metrics_wide.columns.name = None
         metrics = metrics_wide
-        print(f"[INFO] Pivoted metrics into {len(metrics.columns)-2} columns.")
+        print(f"[INFO] Pivoted metrics into {len(metrics.columns) - 2} columns.")
     else:
         metrics = pd.DataFrame(columns=["date", "city"])
 
@@ -106,12 +114,20 @@ def build_features():
 
     # Build monthly date-city grid
     all_months = pd.date_range("2005-01-01", "2025-08-01", freq="MS")
-    base = pd.MultiIndex.from_product([all_months, cities], names=["date", "city"]).to_frame(index=False)
+    base = pd.MultiIndex.from_product(
+        [all_months, cities], names=["date", "city"]
+    ).to_frame(index=False)
     print(f"[INFO] Base grid created: {len(base):,} rows (months × cities)")
 
     # Merge all datasets
     df = base.copy()
-    sources = {"hpi": hpi, "rent": rent, "metrics": metrics, "demo": demo, "macro": macro}
+    sources = {
+        "hpi": hpi,
+        "rent": rent,
+        "metrics": metrics,
+        "demo": demo,
+        "macro": macro,
+    }
     for name, src in sources.items():
         if not src.empty and all(col in src.columns for col in ["date", "city"]):
             df = df.merge(src, on=["date", "city"], how="left")
@@ -126,15 +142,15 @@ def build_features():
     if "population" in df.columns:
         df["population"] = df["population"].astype("Int64")
 
-    df["source"] = "features_build_etl_v7"
-    print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
-
-    # After all merges, before return
+    # -----------------------------------------------------------------
+    # Derived metrics (year-over-year % change)
+    # -----------------------------------------------------------------
     if "hpi_benchmark" in df.columns:
         df["hpi_change_yoy"] = (
             df.groupby("city")["hpi_benchmark"]
-            .apply(lambda s: s.pct_change(12) * 100)
+            .apply(lambda s: s.pct_change(12, fill_method=None) * 100)
             .reset_index(level=0, drop=True)
+            .fillna(0)
         )
 
     if "rent_avg_city" in df.columns:
@@ -142,11 +158,16 @@ def build_features():
             df.groupby("city")["rent_avg_city"]
             .apply(lambda s: s.pct_change(12) * 100)
             .reset_index(level=0, drop=True)
+            .fillna(0)
         )
+
+    df["source"] = "features_build_etl_v9"
+    print(f"[INFO] Final merged features DataFrame: {len(df):,} rows")
     return df
 
+
 # ---------------------------------------------------------------------
-# 4. Upsert (safe defaults for missing columns)
+# 4. Upsert (optimized for Neon DB)
 # ---------------------------------------------------------------------
 def upsert_features(df: pd.DataFrame, batch_size: int = 500):
     if df.empty:
@@ -154,11 +175,21 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
         return
 
     expected_cols = [
-        "date", "city",
-        "hpi_benchmark", "rent_avg_city",
-        "mortgage_rate", "unemployment_rate", "overnight_rate",
-        "population", "migration_rate", "median_income",
-        "gdp_growth", "cpi_yoy", "source"
+        "date",
+        "city",
+        "hpi_benchmark",
+        "rent_avg_city",
+        "hpi_change_yoy",
+        "rent_change_yoy",
+        "mortgage_rate",
+        "unemployment_rate",
+        "overnight_rate",
+        "population",
+        "migration_rate",
+        "median_income",
+        "gdp_growth",
+        "cpi_yoy",
+        "source",
     ]
     for col in expected_cols:
         if col not in df.columns:
@@ -169,6 +200,7 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
         INSERT INTO public.features (
             date, city,
             hpi_benchmark, rent_avg_city,
+            hpi_change_yoy, rent_change_yoy,
             mortgage_rate, unemployment_rate, overnight_rate,
             population, migration_rate, median_income,
             gdp_growth, cpi_yoy,
@@ -177,6 +209,7 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
         VALUES (
             :date, :city,
             :hpi_benchmark, :rent_avg_city,
+            :hpi_change_yoy, :rent_change_yoy,
             :mortgage_rate, :unemployment_rate, :overnight_rate,
             :population, :migration_rate, :median_income,
             :gdp_growth, :cpi_yoy,
@@ -186,6 +219,8 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
         DO UPDATE SET
             hpi_benchmark = EXCLUDED.hpi_benchmark,
             rent_avg_city = EXCLUDED.rent_avg_city,
+            hpi_change_yoy = EXCLUDED.hpi_change_yoy,
+            rent_change_yoy = EXCLUDED.rent_change_yoy,
             mortgage_rate = EXCLUDED.mortgage_rate,
             unemployment_rate = EXCLUDED.unemployment_rate,
             overnight_rate = EXCLUDED.overnight_rate,
@@ -200,6 +235,10 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
 
     total = len(df)
     with engine.begin() as conn:
+        # Warm-up query to activate Neon compute
+        conn.exec_driver_sql("SELECT 1;")
+        print("[DEBUG] Neon warmed up, starting upserts...")
+
         for start in range(0, total, batch_size):
             end = start + batch_size
             chunk = df.iloc[start:end]
@@ -207,6 +246,7 @@ def upsert_features(df: pd.DataFrame, batch_size: int = 500):
             print(f"[DEBUG] Upserted {min(end, total)}/{total} rows...")
 
     print(f"[OK] Upserted {total:,} rows into public.features")
+
 
 # ---------------------------------------------------------------------
 # Entrypoint

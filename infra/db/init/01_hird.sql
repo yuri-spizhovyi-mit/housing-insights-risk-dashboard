@@ -114,8 +114,6 @@ COMMENT ON COLUMN public.rent_index.last_seen IS
     'Timestamp of ETL load or update.';
 
 -- -----------------------------------------------------------------------------
-<<<<<<< HEAD
-=======
 -- Table: public.demographics
 -- Purpose: Store demographic data for each city and date.
 -- Frequency: Monthly (YYYY-MM-01)
@@ -141,7 +139,6 @@ CREATE TABLE IF NOT EXISTS public.demographics (
     
 
 -- -----------------------------------------------------------------------------
->>>>>>> fd2c7950e04d507f03920cd99cc3c2e5228d241e
 -- Raw Data Tables
 -- These tables are the initial "dump" from data collection.
 -- -----------------------------------------------------------------------------
@@ -166,8 +163,6 @@ CREATE TABLE IF NOT EXISTS public.listings_raw (
 CREATE INDEX IF NOT EXISTS idx_listings_raw_geo
 ON public.listings_raw (city, postal_code);
 
-<<<<<<< HEAD
-=======
 
 
 -- ------------------------------------------------------------
@@ -214,8 +209,48 @@ CREATE TABLE public.features (
 COMMENT ON TABLE public.features IS
     'Aggregated feature store combining housing, economic, demographic, and macro data by city and month.';
 
+-- Migration V5: Create model_features table
+-- ----------------------------------------------------------
+-- Holds normalized, model-ready features derived from public.features
+-- Used by Prophet, ARIMA, and LightGBM forecasting modules
 
->>>>>>> fd2c7950e04d507f03920cd99cc3c2e5228d241e
+CREATE TABLE IF NOT EXISTS public.model_features (
+    date                DATE        NOT NULL,
+    city                TEXT        NOT NULL,
+
+    -- raw numeric fields
+    hpi_benchmark       DOUBLE PRECISION,
+    rent_avg_city       DOUBLE PRECISION,
+    mortgage_rate       DOUBLE PRECISION,
+    unemployment_rate   DOUBLE PRECISION,
+    overnight_rate      DOUBLE PRECISION,
+    population          BIGINT,
+    median_income       DOUBLE PRECISION,
+    migration_rate      DOUBLE PRECISION,
+    gdp_growth          DOUBLE PRECISION,
+    cpi_yoy             DOUBLE PRECISION,
+
+    -- scaled (normalized 0–1) features
+    hpi_benchmark_scaled    DOUBLE PRECISION,
+    rent_avg_city_scaled    DOUBLE PRECISION,
+    mortgage_rate_scaled    DOUBLE PRECISION,
+    unemployment_rate_scaled DOUBLE PRECISION,
+    overnight_rate_scaled   DOUBLE PRECISION,
+    population_scaled       DOUBLE PRECISION,
+    median_income_scaled    DOUBLE PRECISION,
+    migration_rate_scaled   DOUBLE PRECISION,
+    gdp_growth_scaled       DOUBLE PRECISION,
+    cpi_yoy_scaled          DOUBLE PRECISION,
+
+    source              TEXT,
+    created_at          TIMESTAMP DEFAULT NOW(),
+
+    CONSTRAINT model_features_pk PRIMARY KEY (date, city)
+);
+
+COMMENT ON TABLE public.model_features IS
+'Contains scaled numeric features derived from the features table for use in forecasting models.';
+
 -- -----------------------------------------------------------------------------
 -- Serving-layer predictions cache
 -- This table stores pre-computed forecasts to serve the API.
@@ -249,32 +284,6 @@ ON public.model_predictions (city, target, horizon_months, predict_date);
 
 
 
-<<<<<<< HEAD
-CREATE TABLE IF NOT EXISTS public.demographics (
-    date                DATE NOT NULL,
-    city                VARCHAR(100) NOT NULL,
-    population          INTEGER,
-    migration_rate      NUMERIC(6,2),          -- percentage or per-1000 rate
-    age_25_34_perc      NUMERIC(5,2),          -- share of population age 25–34
-    median_income       NUMERIC(12,2),         -- median household income
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (date, city)
-);
-
-
--- -----------------------------------------------------------------------------
--- Macro-Economic & Contextual Tables
--- -----------------------------------------------------------------------------
-DROP TABLE IF EXISTS public.macro_economic_data CASCADE;
-CREATE TABLE IF NOT EXISTS public.macro_economic_data (
-    date                DATE,
-    city            VARCHAR(100),
-    unemployment_rate   DECIMAL(5, 2),
-    gdp_growth_rate     DECIMAL(5, 2),
-    prime_lending_rate  DECIMAL(5, 2),
-    housing_starts      INTEGER,
-    PRIMARY KEY (date, province)
-=======
 
 
 -- ------------------------------------------------------------
@@ -290,7 +299,6 @@ CREATE TABLE IF NOT EXISTS public.macro_economic_data (
     source TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (date, city)
->>>>>>> fd2c7950e04d507f03920cd99cc3c2e5228d241e
 );
 
 -- Optional index to speed up joins by date
