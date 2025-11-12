@@ -381,3 +381,15 @@ CREATE TABLE IF NOT EXISTS public.anomaly_signals (
 CREATE INDEX IF NOT EXISTS idx_anomaly_signals_city_target_date
   ON public.anomaly_signals(city, target, detect_date);
 
+CREATE TABLE IF NOT EXISTS public.model_comparison (
+    city TEXT NOT NULL,
+    horizon_months INTEGER NOT NULL,
+    model_name TEXT NOT NULL,
+    mae DOUBLE PRECISION,
+    mape DOUBLE PRECISION,
+    rmse DOUBLE PRECISION,
+    rank INTEGER,
+    best_model BOOLEAN DEFAULT FALSE,
+    evaluated_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT model_comparison_pk PRIMARY KEY (city, horizon_months, model_name)
+);
