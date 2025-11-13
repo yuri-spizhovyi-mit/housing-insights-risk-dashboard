@@ -1,16 +1,14 @@
 """
-train_model_lightgbm_v3.py
+train_model_lightgbm.py
 ----------------------------------------------------------
-Trains LightGBM regression models per city using scaled features and time-based backtesting.
-- Training: 2005–2020
-- Validation: 2020–2025 (evaluate MAPE & MAE)
-- Production forecast: 2025–2035 (120 monthly steps, iterative prediction)
-Writes results into public.model_predictions and logs validation metrics.
+Trains LightGBM regression models per city using scaled input features
+and raw HPI benchmark as target. Forecasts 1, 2, 5, and 10-year horizons
+and writes predictions to public.model_predictions in Neon.
 """
 
 from dotenv import load_dotenv, find_dotenv
 from sqlalchemy import create_engine, text
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import lightgbm as lgb
 import numpy as np
@@ -20,7 +18,7 @@ import os
 # 1. Environment setup
 # ---------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL")
+NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 if not NEON_DATABASE_URL:
     raise RuntimeError("NEON_DATABASE_URL not found in .env")
 
@@ -34,28 +32,16 @@ print("[DEBUG] Connected to Neon via .env")
 def load_model_features():
     query = "SELECT * FROM public.model_features ORDER BY city, date;"
     df = pd.read_sql_query(query, engine)
-    df["date"] = pd.to_datetime(df["date"])
     print(f"[INFO] Loaded {len(df):,} rows from public.model_features")
     return df
 
 
 # ---------------------------------------------------------------------
-# 3. Evaluation metrics
-# ---------------------------------------------------------------------
-def evaluate_performance(y_true, y_pred):
-    mae = np.mean(np.abs(y_true - y_pred))
-    mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-    return mae, mape
-
-
-# ---------------------------------------------------------------------
-# 4. Train and forecast per city
+# 3. Train LightGBM per city
 # ---------------------------------------------------------------------
 def train_lightgbm_per_city(df: pd.DataFrame):
     results = []
-    metrics = []
-    model_name = "lightgbm_v3"
-
+    model_name = "lightgbm_v1"
     feature_cols = [
         "hpi_benchmark_scaled",
         "rent_avg_city_scaled",
@@ -71,19 +57,16 @@ def train_lightgbm_per_city(df: pd.DataFrame):
 
     for city, group in df.groupby("city"):
         group = group.sort_values("date")
-
         X = group[feature_cols]
         y = group["hpi_benchmark"]
 
-        # ---------------- Time-based split ----------------
-        train_mask = group["date"] <= "2020-12-01"
-        valid_mask = (group["date"] > "2020-12-01") & (group["date"] <= "2025-12-01")
+        # train/test split by time (80/20)
+        split_idx = int(len(group) * 0.8)
+        X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+        y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
 
-        X_train, y_train = X[train_mask], y[train_mask]
-        X_valid, y_valid = X[valid_mask], y[valid_mask]
-
-        train_data = lgb.Dataset(X_train, label=y_train)
-        valid_data = lgb.Dataset(X_valid, label=y_valid, reference=train_data)
+        train_set = lgb.Dataset(X_train, y_train)
+        valid_set = lgb.Dataset(X_test, y_test, reference=train_set)
 
         params = {
             "objective": "regression",
@@ -95,46 +78,30 @@ def train_lightgbm_per_city(df: pd.DataFrame):
 
         model = lgb.train(
             params,
-            train_data,
+            train_set,
             num_boost_round=500,
-            valid_sets=[train_data, valid_data],
+            valid_sets=[train_set, valid_set],
             callbacks=[
                 lgb.early_stopping(stopping_rounds=50),
                 lgb.log_evaluation(period=0),
             ],
         )
 
-        # ---------------- Validation ----------------
-        if not X_valid.empty:
-            y_pred_val = model.predict(X_valid)
-            mae, mape = evaluate_performance(y_valid.values, y_pred_val)
-            metrics.append({"city": city, "mae": mae, "mape": mape})
-            print(f"[VAL] {city}: MAE={mae:,.0f}, MAPE={mape:.2f}%")
+        # Forecast future horizons (1, 2, 5, 10 years → 12, 24, 60, 120 months)
+        last_features = X.iloc[-1].values.reshape(1, -1)
+        last_date = pd.to_datetime(group["date"].iloc[-1])
 
-        # ---------------- Retrain on full data ----------------
-        full_data = lgb.Dataset(X, label=y)
-        final_model = lgb.train(
-            params, full_data, num_boost_round=int(model.best_iteration or 300)
-        )
-
-        # ---------------- Forecast monthly for 10 years ----------------
-        last_row = group.iloc[-1].copy()
-        last_date = last_row["date"]
-
-        for i in range(120):
-            next_date = last_date + pd.DateOffset(months=i + 1)
-            # For simplicity, use last known scaled features (static forecast)
-            X_next = last_row[feature_cols].values.reshape(1, -1)
-            yhat = float(final_model.predict(X_next)[0])
+        for horizon, months in [(1, 12), (2, 24), (5, 60), (10, 120)]:
+            yhat = float(model.predict(last_features)[0])
             yhat_lower, yhat_upper = yhat * 0.95, yhat * 1.05
 
             results.append(
                 {
                     "model_name": model_name,
                     "target": "hpi_benchmark",
-                    "horizon_months": i + 1,
+                    "horizon_months": months,
                     "city": city,
-                    "predict_date": next_date,
+                    "predict_date": last_date + pd.DateOffset(months=months),
                     "yhat": yhat,
                     "yhat_lower": yhat_lower,
                     "yhat_upper": yhat_upper,
@@ -144,13 +111,13 @@ def train_lightgbm_per_city(df: pd.DataFrame):
                 }
             )
 
-        print(f"[OK] LightGBM trained for {city} ({len(group)} records, 120 forecasts)")
+        print(f"[OK] Trained LightGBM for {city} ({len(group)} records)")
 
-    return pd.DataFrame(results), pd.DataFrame(metrics)
+    return pd.DataFrame(results)
 
 
 # ---------------------------------------------------------------------
-# 5. Write predictions to public.model_predictions
+# 4. Write predictions to public.model_predictions
 # ---------------------------------------------------------------------
 def write_predictions(df_preds: pd.DataFrame):
     if df_preds.empty:
@@ -172,9 +139,7 @@ def write_predictions(df_preds: pd.DataFrame):
         conn.exec_driver_sql("SELECT 1;")  # warm-up Neon
         conn.execute(insert_sql, df_preds.to_dict(orient="records"))
 
-    print(
-        f"[OK] Inserted {len(df_preds):,} LightGBM monthly predictions into public.model_predictions"
-    )
+    print(f"[OK] Inserted {len(df_preds):,} predictions into public.model_predictions")
 
 
 # ---------------------------------------------------------------------
@@ -182,18 +147,10 @@ def write_predictions(df_preds: pd.DataFrame):
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
     start = datetime.now()
-    print("[DEBUG] train_model_lightgbm_v3 started ...")
+    print("[DEBUG] train_model_lightgbm started ...")
 
     df_features = load_model_features()
-    df_preds, df_metrics = train_lightgbm_per_city(df_features)
+    df_preds = train_lightgbm_per_city(df_features)
     write_predictions(df_preds)
 
-    if not df_metrics.empty:
-        print("\n[SUMMARY] Validation results (2020–2025):")
-        print(
-            df_metrics.sort_values("mape").to_string(
-                index=False, formatters={"mape": "{:.2f}%".format}
-            )
-        )
-
-    print(f"\n[DONE] train_model_lightgbm_v3 completed in {datetime.now() - start}")
+    print(f"[DONE] train_model_lightgbm completed in {datetime.now() - start}")

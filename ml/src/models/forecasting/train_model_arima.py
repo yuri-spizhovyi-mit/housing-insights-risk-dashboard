@@ -1,9 +1,11 @@
 """
-train_model_arima_v2.py
+train_model_arima_v4.py
 ----------------------------------------------------------
-Trains ARIMA models per city using statsmodels (stable, pure Python).
-Forecasts 1, 2, 5, and 10-year horizons and writes predictions to
-public.model_predictions in Neon database.
+Trains ARIMA models per city using statsmodels with time-based backtesting.
+- Training: 2005–2020
+- Validation: 2020–2025 (evaluate MAPE & MAE)
+- Production forecast: 2025–2035 (120 monthly steps)
+Writes results into public.model_predictions and logs validation metrics.
 """
 
 from dotenv import load_dotenv, find_dotenv
@@ -35,16 +37,27 @@ print("[DEBUG] Connected to Neon via .env")
 def load_features():
     query = "SELECT date, city, hpi_benchmark FROM public.features ORDER BY city, date;"
     df = pd.read_sql_query(query, engine)
+    df["date"] = pd.to_datetime(df["date"])
     print(f"[INFO] Loaded {len(df):,} rows from public.features")
     return df
 
 
 # ---------------------------------------------------------------------
-# 3. Train ARIMA per city (using statsmodels)
+# 3. Evaluate model performance
+# ---------------------------------------------------------------------
+def evaluate_performance(y_true, y_pred):
+    mae = np.mean(np.abs(y_true - y_pred))
+    mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+    return mae, mape
+
+
+# ---------------------------------------------------------------------
+# 4. Train ARIMA per city with backtesting
 # ---------------------------------------------------------------------
 def train_arima_per_city(df: pd.DataFrame):
     results = []
-    model_name = "arima_v2"
+    model_name = "arima_v4"
+    metrics = []
 
     for city, group in df.groupby("city"):
         group = group.sort_values("date")
@@ -54,52 +67,66 @@ def train_arima_per_city(df: pd.DataFrame):
             print(f"[WARN] Skipping {city}: constant or zero HPI.")
             continue
 
-        try:
-            # Difference non-stationary data automatically
-            d = 1 if (y.diff().abs().sum() > 0) else 0
+        # Split data chronologically
+        train_df = group[group["date"] <= "2020-12-01"]
+        valid_df = group[
+            (group["date"] > "2020-12-01") & (group["date"] <= "2025-12-01")
+        ]
 
-            model = ARIMA(y, order=(1, d, 1))
+        try:
+            # ---------------- TRAIN ----------------
+            model = ARIMA(train_df["hpi_benchmark"], order=(1, 1, 1))
             fitted = model.fit()
 
-            forecast_res = fitted.get_forecast(steps=120)  # 10 years (12 months * 10)
+            # ---------------- VALIDATION ----------------
+            if not valid_df.empty:
+                forecast_val = fitted.forecast(steps=len(valid_df))
+                mae, mape = evaluate_performance(
+                    valid_df["hpi_benchmark"].values, forecast_val.values
+                )
+                metrics.append({"city": city, "mae": mae, "mape": mape})
+                print(f"[VAL] {city}: MAE={mae:,.0f}, MAPE={mape:.2f}%")
+
+            # ---------------- RETRAIN ON FULL DATA ----------------
+            full_model = ARIMA(group["hpi_benchmark"], order=(1, 1, 1))
+            fitted_full = full_model.fit()
+
+            forecast_res = fitted_full.get_forecast(steps=120)  # 10 years (monthly)
             forecast = forecast_res.predicted_mean
             conf_int = forecast_res.conf_int(alpha=0.05)
 
             last_date = pd.to_datetime(group["date"].iloc[-1])
 
-            for horizon, months in [(1, 12), (2, 24), (5, 60), (10, 120)]:
-                if months > len(forecast):
-                    continue
-                yhat = float(forecast.iloc[months - 1])
-                yhat_lower = float(conf_int.iloc[months - 1, 0])
-                yhat_upper = float(conf_int.iloc[months - 1, 1])
-
+            for i in range(120):
+                predict_date = last_date + pd.DateOffset(months=i + 1)
                 results.append(
                     {
                         "model_name": model_name,
                         "target": "hpi_benchmark",
-                        "horizon_months": months,
+                        "horizon_months": i + 1,
                         "city": city,
-                        "predict_date": last_date + pd.DateOffset(months=months),
-                        "yhat": yhat,
-                        "yhat_lower": yhat_lower,
-                        "yhat_upper": yhat_upper,
+                        "predict_date": predict_date,
+                        "yhat": float(forecast.iloc[i]),
+                        "yhat_lower": float(conf_int.iloc[i, 0]),
+                        "yhat_upper": float(conf_int.iloc[i, 1]),
                         "features_version": "features_build_etl_v9",
                         "model_artifact_uri": None,
                         "is_micro": False,
                     }
                 )
 
-            print(f"[OK] ARIMA trained for {city} ({len(group)} records)")
+            print(
+                f"[OK] ARIMA trained for {city} ({len(group)} records, 120 forecasts)"
+            )
 
         except Exception as e:
             print(f"[ERROR] ARIMA failed for {city}: {e}")
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(results), pd.DataFrame(metrics)
 
 
 # ---------------------------------------------------------------------
-# 4. Write predictions to public.model_predictions
+# 5. Write predictions to public.model_predictions
 # ---------------------------------------------------------------------
 def write_predictions(df_preds: pd.DataFrame):
     if df_preds.empty:
@@ -122,7 +149,7 @@ def write_predictions(df_preds: pd.DataFrame):
         conn.execute(insert_sql, df_preds.to_dict(orient="records"))
 
     print(
-        f"[OK] Inserted {len(df_preds):,} ARIMA predictions into public.model_predictions"
+        f"[OK] Inserted {len(df_preds):,} ARIMA monthly predictions into public.model_predictions"
     )
 
 
@@ -131,10 +158,18 @@ def write_predictions(df_preds: pd.DataFrame):
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
     start = datetime.now()
-    print("[DEBUG] train_model_arima started ...")
+    print("[DEBUG] train_model_arima_v4 started ...")
 
     df_features = load_features()
-    df_preds = train_arima_per_city(df_features)
+    df_preds, df_metrics = train_arima_per_city(df_features)
     write_predictions(df_preds)
 
-    print(f"[DONE] train_model_arima completed in {datetime.now() - start}")
+    if not df_metrics.empty:
+        print("\n[SUMMARY] Validation results (2020–2025):")
+        print(
+            df_metrics.sort_values("mape").to_string(
+                index=False, formatters={"mape": "{:.2f}%".format}
+            )
+        )
+
+    print(f"\n[DONE] train_model_arima_v4 completed in {datetime.now() - start}")
