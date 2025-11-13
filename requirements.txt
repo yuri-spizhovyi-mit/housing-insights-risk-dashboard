@@ -21,3 +21,4 @@ lightgbm
 pyarrow
 fastparquet
 pmdarima
+tensorflow
