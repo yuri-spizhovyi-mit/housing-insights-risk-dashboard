@@ -1,29 +1,28 @@
 """
-train_model_arima_v4.py
+train_model_prophet_v1.py
 ----------------------------------------------------------
-Trains ARIMA models per city using statsmodels with time-based backtesting.
-- Training: 2005–2020
-- Validation: 2020–2025 (evaluate MAPE & MAE)
+Unified dual-target Prophet model training script.
+Forecasts both 'price' (hpi_benchmark) and 'rent' (rent_avg_city) per city.
+Splits data chronologically for backtesting:
+- Train: 2005–2020
+- Validation: 2020–2025 (MAE & MAPE evaluation)
 - Production forecast: 2025–2035 (120 monthly steps)
-Writes results into public.model_predictions and logs validation metrics.
+Writes results into public.model_predictions for both targets.
 """
 
 from dotenv import load_dotenv, find_dotenv
 from sqlalchemy import create_engine, text
 from datetime import datetime
-from statsmodels.tsa.arima.model import ARIMA
+from prophet import Prophet
 import pandas as pd
 import numpy as np
 import os
-import warnings
-
-warnings.filterwarnings("ignore")
 
 # ---------------------------------------------------------------------
 # 1. Environment setup
 # ---------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
+NEON_DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL")
 if not NEON_DATABASE_URL:
     raise RuntimeError("NEON_DATABASE_URL not found in .env")
 
@@ -35,7 +34,7 @@ print("[DEBUG] Connected to Neon via .env")
 # 2. Load data from public.features
 # ---------------------------------------------------------------------
 def load_features():
-    query = "SELECT date, city, hpi_benchmark FROM public.features ORDER BY city, date;"
+    query = "SELECT date, city, hpi_benchmark, rent_avg_city FROM public.features ORDER BY city, date;"
     df = pd.read_sql_query(query, engine)
     df["date"] = pd.to_datetime(df["date"])
     print(f"[INFO] Loaded {len(df):,} rows from public.features")
@@ -52,63 +51,68 @@ def evaluate_performance(y_true, y_pred):
 
 
 # ---------------------------------------------------------------------
-# 4. Train ARIMA per city with backtesting
+# 4. Train Prophet per city for both targets
 # ---------------------------------------------------------------------
-def train_arima_per_city(df: pd.DataFrame):
+def train_prophet_dual_target(df: pd.DataFrame):
     results = []
-    model_name = "arima_v1"
     metrics = []
+    model_name = "prophet_v1"
 
-    for city, group in df.groupby("city"):
-        group = group.sort_values("date")
-        y = group["hpi_benchmark"].astype(float)
+    for target, column in [("price", "hpi_benchmark"), ("rent", "rent_avg_city")]:
+        print(f"\n[INFO] ===== Training target: {target.upper()} =====")
 
-        if y.nunique() <= 1:
-            print(f"[WARN] Skipping {city}: constant or zero HPI.")
-            continue
+        for city, group in df.groupby("city"):
+            group = group.sort_values("date")
 
-        # Split data chronologically
-        train_df = group[group["date"] <= "2020-12-01"]
-        valid_df = group[
-            (group["date"] > "2020-12-01") & (group["date"] <= "2025-12-01")
-        ]
+            prophet_df = group.rename(columns={column: "y", "date": "ds"})[["ds", "y"]]
 
-        try:
+            if prophet_df["y"].isna().all() or prophet_df["y"].nunique() <= 1:
+                print(f"[WARN] Skipping {city}/{target}: not enough variation.")
+                continue
+
+            # Split chronologically
+            train_df = prophet_df[prophet_df["ds"] <= "2020-12-01"]
+            valid_df = prophet_df[
+                (prophet_df["ds"] > "2020-12-01") & (prophet_df["ds"] <= "2025-12-01")
+            ]
+
             # ---------------- TRAIN ----------------
-            model = ARIMA(train_df["hpi_benchmark"], order=(1, 1, 1))
-            fitted = model.fit()
+            model = Prophet(yearly_seasonality=True, changepoint_prior_scale=0.05)
+            model.fit(train_df)
 
             # ---------------- VALIDATION ----------------
             if not valid_df.empty:
-                forecast_val = fitted.forecast(steps=len(valid_df))
+                forecast_val = model.predict(valid_df[["ds"]])
                 mae, mape = evaluate_performance(
-                    valid_df["hpi_benchmark"].values, forecast_val.values
+                    valid_df["y"].values, forecast_val["yhat"].values
                 )
-                metrics.append({"city": city, "mae": mae, "mape": mape})
-                print(f"[VAL] {city}: MAE={mae:,.0f}, MAPE={mape:.2f}%")
+                metrics.append(
+                    {"target": target, "city": city, "mae": mae, "mape": mape}
+                )
+                print(f"[VAL] {city}/{target}: MAE={mae:,.0f}, MAPE={mape:.2f}%")
 
             # ---------------- RETRAIN ON FULL DATA ----------------
-            full_model = ARIMA(group["hpi_benchmark"], order=(1, 1, 1))
-            fitted_full = full_model.fit()
+            full_model = Prophet(yearly_seasonality=True, changepoint_prior_scale=0.05)
+            full_model.fit(prophet_df)
 
-            forecast_res = fitted_full.get_forecast(steps=120)  # 10 years (monthly)
-            forecast = forecast_res.predicted_mean
-            conf_int = forecast_res.conf_int(alpha=0.05)
+            # Forecast 10 years ahead (120 months)
+            future = full_model.make_future_dataframe(periods=120, freq="MS")
+            forecast = full_model.predict(future)
+            forecast_future = forecast[forecast["ds"] > prophet_df["ds"].max()]
 
-            last_date = pd.to_datetime(group["date"].iloc[-1])
-
-            for i in range(120):
-                predict_date = last_date + pd.DateOffset(months=i + 1)
+            for _, row in forecast_future.iterrows():
                 results.append(
                     {
                         "model_name": model_name,
-                        "target": "hpi_benchmark",
-                        "horizon_months": i + 1,
+                        "target": target,
+                        "horizon_months": int(
+                            (row["ds"] - prophet_df["ds"].max()).days / 30.4
+                        ),
                         "city": city,
-                        "predict_date": predict_date,
-                        "yhat": float(forecast.iloc[i]),
-                        "yhat_lower": float(conf_int.iloc[i, 0]),
-                        "yhat_upper": float(conf_int.iloc[i, 1]),
+                        "predict_date": row["ds"],
+                        "yhat": float(row["yhat"]),
+                        "yhat_lower": float(row["yhat_lower"]),
+                        "yhat_upper": float(row["yhat_upper"]),
                         "features_version": "features_build_etl_v9",
                         "model_artifact_uri": None,
                         "is_micro": False,
@@ -116,11 +120,8 @@ def train_arima_per_city(df: pd.DataFrame):
                 )
 
             print(
-                f"[OK] ARIMA trained for {city} ({len(group)} records, 120 forecasts)"
+                f"[OK] Prophet trained for {city}/{target} ({len(forecast_future)} monthly forecasts)"
             )
-
-        except Exception as e:
-            print(f"[ERROR] ARIMA failed for {city}: {e}")
 
     return pd.DataFrame(results), pd.DataFrame(metrics)
 
@@ -149,7 +150,7 @@ def write_predictions(df_preds: pd.DataFrame):
         conn.execute(insert_sql, df_preds.to_dict(orient="records"))
 
     print(
-        f"[OK] Inserted {len(df_preds):,} ARIMA monthly predictions into public.model_predictions"
+        f"[OK] Inserted {len(df_preds):,} Prophet predictions (both targets) into public.model_predictions"
     )
 
 
@@ -158,10 +159,10 @@ def write_predictions(df_preds: pd.DataFrame):
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
     start = datetime.now()
-    print("[DEBUG] train_model_arima_v4 started ...")
+    print("[DEBUG] train_model_prophet_v1 started ...")
 
     df_features = load_features()
-    df_preds, df_metrics = train_arima_per_city(df_features)
+    df_preds, df_metrics = train_prophet_dual_target(df_features)
     write_predictions(df_preds)
 
     if not df_metrics.empty:
@@ -172,4 +173,4 @@ if __name__ == "__main__":
             )
         )
 
-    print(f"\n[DONE] train_model_arima_v4 completed in {datetime.now() - start}")
+    print(f"\n[DONE] train_model_prophet_v1 completed in {datetime.now() - start}")

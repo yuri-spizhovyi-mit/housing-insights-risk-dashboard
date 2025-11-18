@@ -53,7 +53,7 @@ def evaluate_performance(y_true, y_pred):
 # ---------------------------------------------------------------------
 def train_prophet_per_city(df: pd.DataFrame):
     results = []
-    model_name = "prophet_v3"
+    model_name = "prophet_v1"
     metrics = []
 
     for city, group in df.groupby("city"):

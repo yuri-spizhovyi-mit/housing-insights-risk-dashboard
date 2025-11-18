@@ -54,7 +54,7 @@ def evaluate_performance(y_true, y_pred):
 def train_lightgbm_per_city(df: pd.DataFrame):
     results = []
     metrics = []
-    model_name = "lightgbm_v3"
+    model_name = "lightgbm_v1"
 
     feature_cols = [
         "hpi_benchmark_scaled",
