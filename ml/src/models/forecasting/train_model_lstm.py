@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore")
 # 1. Environment setup
 # ---------------------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
+NEON_DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL")
 if not NEON_DATABASE_URL:
     raise RuntimeError("NEON_DATABASE_URL not found in .env")
 
@@ -68,7 +68,7 @@ def evaluate_performance(y_true, y_pred):
 def train_lstm_per_city(df: pd.DataFrame):
     results = []
     metrics = []
-    model_name = "lstm_v1"
+    model_name = "lstm"
     seq_length = 12  # 12 months window
 
     for city, group in df.groupby("city"):
