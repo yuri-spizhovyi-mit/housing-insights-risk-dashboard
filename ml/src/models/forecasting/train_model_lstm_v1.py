@@ -22,7 +22,7 @@ from sklearn.preprocessing import MinMaxScaler
 import os
 import warnings
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 # ---------------------------------------------------------------------
 # 1. Environment setup
@@ -35,15 +35,17 @@ if not NEON_DATABASE_URL:
 engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
 print("[DEBUG] Connected to Neon via .env")
 
+
 # ---------------------------------------------------------------------
 # 2. Load data from public.features
 # ---------------------------------------------------------------------
 def load_features():
     query = "SELECT date, city, hpi_benchmark, rent_avg_city FROM public.features ORDER BY city, date;"
     df = pd.read_sql_query(query, engine)
-    df['date'] = pd.to_datetime(df['date'])
+    df["date"] = pd.to_datetime(df["date"])
     print(f"[INFO] Loaded {len(df):,} rows from public.features")
     return df
+
 
 # ---------------------------------------------------------------------
 # 3. Helper functions
@@ -51,14 +53,16 @@ def load_features():
 def create_sequences(data, seq_length):
     X, y = [], []
     for i in range(len(data) - seq_length):
-        X.append(data[i:i + seq_length])
+        X.append(data[i : i + seq_length])
         y.append(data[i + seq_length])
     return np.array(X), np.array(y)
+
 
 def evaluate_performance(y_true, y_pred):
     mae = np.mean(np.abs(y_true - y_pred))
     mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
     return mae, mape
+
 
 # ---------------------------------------------------------------------
 # 4. Train LSTM per city for both targets
@@ -72,8 +76,8 @@ def train_lstm_dual_target(df: pd.DataFrame):
     for target, column in [("price", "hpi_benchmark"), ("rent", "rent_avg_city")]:
         print(f"\n[INFO] ===== Training target: {target.upper()} =====")
 
-        for city, group in df.groupby('city'):
-            group = group.sort_values('date')
+        for city, group in df.groupby("city"):
+            group = group.sort_values("date")
             y = group[column].astype(float).values.reshape(-1, 1)
 
             if np.all(y == 0) or len(y) < seq_length * 2:
@@ -84,8 +88,10 @@ def train_lstm_dual_target(df: pd.DataFrame):
             y_scaled = scaler.fit_transform(y)
 
             # Split chronologically
-            split_train = group['date'] <= '2020-12-01'
-            split_valid = (group['date'] > '2020-12-01') & (group['date'] <= '2025-12-01')
+            split_train = group["date"] <= "2020-12-01"
+            split_valid = (group["date"] > "2020-12-01") & (
+                group["date"] <= "2025-12-01"
+            )
 
             train_data = y_scaled[split_train]
             valid_data = y_scaled[split_valid]
@@ -97,11 +103,10 @@ def train_lstm_dual_target(df: pd.DataFrame):
             X_valid = X_valid.reshape((X_valid.shape[0], X_valid.shape[1], 1))
 
             # ---------------- Build Model ----------------
-            model = Sequential([
-                LSTM(64, activation='tanh', input_shape=(seq_length, 1)),
-                Dense(1)
-            ])
-            model.compile(optimizer='adam', loss='mae')
+            model = Sequential(
+                [LSTM(64, activation="tanh", input_shape=(seq_length, 1)), Dense(1)]
+            )
+            model.compile(optimizer="adam", loss="mae")
 
             model.fit(X_train, y_train, epochs=50, batch_size=8, verbose=0)
 
@@ -111,7 +116,9 @@ def train_lstm_dual_target(df: pd.DataFrame):
                 y_true = scaler.inverse_transform(y_valid.reshape(-1, 1)).flatten()
                 y_pred = scaler.inverse_transform(y_pred_val).flatten()
                 mae, mape = evaluate_performance(y_true, y_pred)
-                metrics.append({'target': target, 'city': city, 'mae': mae, 'mape': mape})
+                metrics.append(
+                    {"target": target, "city": city, "mae": mae, "mape": mape}
+                )
                 print(f"[VAL] {city}/{target}: MAE={mae:,.0f}, MAPE={mape:.2f}%")
 
             # ---------------- Retrain on Full Data ----------------
@@ -126,33 +133,42 @@ def train_lstm_dual_target(df: pd.DataFrame):
             for _ in range(120):
                 next_pred = model.predict(last_sequence, verbose=0)[0, 0]
                 preds_scaled.append(next_pred)
-                last_sequence = np.append(last_sequence[:, 1:, :], [[[next_pred]]], axis=1)
+                last_sequence = np.append(
+                    last_sequence[:, 1:, :], [[[next_pred]]], axis=1
+                )
 
-            preds = scaler.inverse_transform(np.array(preds_scaled).reshape(-1, 1)).flatten()
-            last_date = pd.to_datetime(group['date'].iloc[-1])
+            preds = scaler.inverse_transform(
+                np.array(preds_scaled).reshape(-1, 1)
+            ).flatten()
+            last_date = pd.to_datetime(group["date"].iloc[-1])
 
             for i in range(120):
-                predict_date = last_date + pd.DateOffset(months=i+1)
+                predict_date = last_date + pd.DateOffset(months=i + 1)
                 yhat = float(preds[i])
                 yhat_lower, yhat_upper = yhat * 0.95, yhat * 1.05
 
-                results.append({
-                    'model_name': model_name,
-                    'target': target,
-                    'horizon_months': i+1,
-                    'city': city,
-                    'predict_date': predict_date,
-                    'yhat': yhat,
-                    'yhat_lower': yhat_lower,
-                    'yhat_upper': yhat_upper,
-                    'features_version': 'features_build_etl_v9',
-                    'model_artifact_uri': None,
-                    'is_micro': False
-                })
+                results.append(
+                    {
+                        "model_name": model_name,
+                        "target": target,
+                        "horizon_months": i + 1,
+                        "city": city,
+                        "predict_date": predict_date,
+                        "yhat": yhat,
+                        "yhat_lower": yhat_lower,
+                        "yhat_upper": yhat_upper,
+                        "features_version": "features_build_etl_v9",
+                        "model_artifact_uri": None,
+                        "is_micro": False,
+                    }
+                )
 
-            print(f"[OK] LSTM trained for {city}/{target} ({len(group)} records, 120 forecasts)")
+            print(
+                f"[OK] LSTM trained for {city}/{target} ({len(group)} records, 120 forecasts)"
+            )
 
     return pd.DataFrame(results), pd.DataFrame(metrics)
+
 
 # ---------------------------------------------------------------------
 # 5. Write predictions to public.model_predictions
@@ -175,14 +191,17 @@ def write_predictions(df_preds: pd.DataFrame):
 
     with engine.begin() as conn:
         conn.exec_driver_sql("SELECT 1;")
-        conn.execute(insert_sql, df_preds.to_dict(orient='records'))
+        conn.execute(insert_sql, df_preds.to_dict(orient="records"))
 
-    print(f"[OK] Inserted {len(df_preds):,} LSTM predictions (both targets) into public.model_predictions")
+    print(
+        f"[OK] Inserted {len(df_preds):,} LSTM predictions (both targets) into public.model_predictions"
+    )
+
 
 # ---------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------
-if __name__ == '__main__':
+if __name__ == "__main__":
     start = datetime.now()
     print("[DEBUG] train_model_lstm_v1 started ...")
 
@@ -192,6 +211,10 @@ if __name__ == '__main__':
 
     if not df_metrics.empty:
         print("\n[SUMMARY] Validation results (2020–2025):")
-        print(df_metrics.sort_values('mape').to_string(index=False, formatters={'mape': '{:.2f}%'.format}))
+        print(
+            df_metrics.sort_values("mape").to_string(
+                index=False, formatters={"mape": "{:.2f}%".format}
+            )
+        )
 
     print(f"\n[DONE] train_model_lstm_v1 completed in {datetime.now() - start}")
