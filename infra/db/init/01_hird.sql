@@ -164,10 +164,9 @@ CREATE INDEX IF NOT EXISTS idx_listings_raw_geo
 ON public.listings_raw (city, postal_code);
 
 
-
 -- ------------------------------------------------------------
--- Migration: V5__create_features_table.sql
--- Purpose: Central feature store for housing models
+-- Migration: V10__create_features_table_with_property_type.sql
+-- Purpose: Central feature store for housing models (property_type aware)
 -- ------------------------------------------------------------
 
 DROP TABLE IF EXISTS public.features CASCADE;
@@ -175,6 +174,7 @@ DROP TABLE IF EXISTS public.features CASCADE;
 CREATE TABLE public.features (
     date DATE NOT NULL,
     city TEXT NOT NULL,
+    property_type TEXT NOT NULL,
 
     -- Housing data
     hpi_benchmark NUMERIC(14,2),
@@ -199,15 +199,16 @@ CREATE TABLE public.features (
     -- Macro context
     gdp_growth NUMERIC(6,3),
     cpi_yoy NUMERIC(6,3),
+    migration_rate DOUBLE PRECISION,
 
     -- Metadata
     source TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (date, city)
+    PRIMARY KEY (date, city, property_type)
 );
 
 COMMENT ON TABLE public.features IS
-    'Aggregated feature store combining housing, economic, demographic, and macro data by city and month.';
+    'Aggregated feature store combining housing, rent, economic, demographic, and macro data by city, month, and property type.';
 
 -- Migration V5: Create model_features table
 -- ----------------------------------------------------------
