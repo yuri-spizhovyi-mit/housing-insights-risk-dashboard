@@ -1,4 +1,3 @@
-
 """
 features_to_model_etl_v2.py
 ----------------------------------------
@@ -59,15 +58,22 @@ def load_features():
 # -------------------------------
 def scale_group(df):
     numeric_cols = [
-        "hpi_benchmark", "rent_avg_city",
-        "mortgage_rate", "unemployment_rate", "overnight_rate",
-        "population", "median_income", "migration_rate",
-        "gdp_growth", "cpi_yoy",
-        "hpi_change_yoy", "rent_change_yoy",
+        "hpi_benchmark",
+        "rent_avg_city",
+        "mortgage_rate",
+        "unemployment_rate",
+        "overnight_rate",
+        "population",
+        "median_income",
+        "migration_rate",
+        "gdp_growth",
+        "cpi_yoy",
+        "hpi_change_yoy",
+        "rent_change_yoy",
     ]
 
     for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.sort_values(["city", "property_type", "date"])
 
@@ -85,8 +91,8 @@ def build_model_features():
     df = load_features()
     df = scale_group(df)
 
-    df['etl_version'] = "features_to_model_etl_v2"
-    df['processed_at'] = datetime.now(timezone.utc)
+    df["etl_version"] = "features_to_model_etl_v2"
+    df["processed_at"] = datetime.now(timezone.utc)
 
     print("[INFO] Final model_features shape:", df.shape)
     return df
@@ -97,18 +103,28 @@ def build_model_features():
 # -------------------------------
 def write_to_db(df):
     cols = [
-        "date", "city", "property_type",
-        "hpi_benchmark", "rent_avg_city",
-        "mortgage_rate", "unemployment_rate", "overnight_rate",
-        "population", "median_income", "migration_rate",
-        "gdp_growth", "cpi_yoy",
-        "hpi_change_yoy", "rent_change_yoy",
-        "etl_version", "processed_at"
+        "date",
+        "city",
+        "property_type",
+        "hpi_benchmark",
+        "rent_avg_city",
+        "mortgage_rate",
+        "unemployment_rate",
+        "overnight_rate",
+        "population",
+        "median_income",
+        "migration_rate",
+        "gdp_growth",
+        "cpi_yoy",
+        "hpi_change_yoy",
+        "rent_change_yoy",
+        "etl_version",
+        "processed_at",
     ]
 
     sql = text(f"""
         INSERT INTO public.model_features ({", ".join(cols)})
-        VALUES ({", ".join(":"+c for c in cols)})
+        VALUES ({", ".join(":" + c for c in cols)})
         ON CONFLICT (date, city, property_type)
         DO UPDATE SET
             hpi_benchmark = EXCLUDED.hpi_benchmark,
@@ -135,9 +151,9 @@ def write_to_db(df):
         print("[DEBUG] Writing model_features...")
 
         for i in range(0, total, batch_size):
-            batch = df.iloc[i:i+batch_size]
+            batch = df.iloc[i : i + batch_size]
             conn.execute(sql, batch.to_dict(orient="records"))
-            print(f"[WRITE] Batch {i//batch_size+1} → {len(batch)} rows")
+            print(f"[WRITE] Batch {i // batch_size + 1} → {len(batch)} rows")
 
     print(f"[OK] Written {total} rows to public.model_features")
 
