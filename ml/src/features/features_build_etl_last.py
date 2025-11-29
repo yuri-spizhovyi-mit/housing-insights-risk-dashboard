@@ -1,13 +1,13 @@
 """
 features_build_etl_v1_legacy_with_property_type.py
 ----------------------------------------------------
-Rebuilds the ORIGINAL v1-style feature store with 
-- raw features 
-- v1 YoY 
-- v1 MinMax scaling 
-- macro_scaled 
-- demographics_scaled 
-- property_type_id 
+Rebuilds the ORIGINAL v1-style feature store with
+- raw features
+- v1 YoY
+- v1 MinMax scaling
+- macro_scaled
+- demographics_scaled
+- property_type_id
 - unified per-city monthly time series (no splitting)
 
 Outputs → public.model_features
@@ -131,19 +131,25 @@ def build_features():
     # because we DO NOT SPLIT series,
     # we aggregate property_type_id by taking the mode per (city, date)
     df = df.sort_values(["city", "date"])
-    df = df.groupby(["city", "date"]).agg({
-        "hpi_benchmark": "mean",
-        "rent_avg_city": "mean",
-        "mortgage_rate": "first",
-        "unemployment_rate": "first",
-        "overnight_rate": "first",
-        "population": "first",
-        "median_income": "first",
-        "migration_rate": "first",
-        "gdp_growth": "first",
-        "cpi_yoy": "first",
-        "property_type_id": "max"  # simple encoding – legacy-compatible
-    }).reset_index()
+    df = (
+        df.groupby(["city", "date"])
+        .agg(
+            {
+                "hpi_benchmark": "mean",
+                "rent_avg_city": "mean",
+                "mortgage_rate": "first",
+                "unemployment_rate": "first",
+                "overnight_rate": "first",
+                "population": "first",
+                "median_income": "first",
+                "migration_rate": "first",
+                "gdp_growth": "first",
+                "cpi_yoy": "first",
+                "property_type_id": "max",  # simple encoding – legacy-compatible
+            }
+        )
+        .reset_index()
+    )
 
     # YOY (legacy formula)
     df = compute_yoy(df)
@@ -168,14 +174,14 @@ def write_to_db(df):
         insert_cols = list(df.columns)
         sql = text(f"""
             INSERT INTO public.model_features ({", ".join(insert_cols)})
-            VALUES ({", ".join(":"+c for c in insert_cols)});
+            VALUES ({", ".join(":" + c for c in insert_cols)});
         """)
 
         batch = 3000
         for i in range(0, len(df), batch):
-            part = df.iloc[i:i+batch]
+            part = df.iloc[i : i + batch]
             conn.execute(sql, part.to_dict(orient="records"))
-            print(f"  inserted rows {i}–{i+len(part)}")
+            print(f"  inserted rows {i}–{i + len(part)}")
 
     print(f"[DONE] Inserted {len(df)} rows into model_features.")
 
