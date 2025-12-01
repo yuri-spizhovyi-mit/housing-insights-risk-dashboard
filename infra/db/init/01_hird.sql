@@ -215,42 +215,55 @@ COMMENT ON TABLE public.features IS
 -- Holds normalized, model-ready features derived from public.features
 -- Used by Prophet, ARIMA, and LightGBM forecasting modules
 
-CREATE TABLE IF NOT EXISTS public.model_features (
-    date                DATE        NOT NULL,
-    city                TEXT        NOT NULL,
+DROP TABLE IF EXISTS public.model_features;
 
-    -- raw numeric fields
+CREATE TABLE public.model_features (
+    date                DATE NOT NULL,
+    city                TEXT NOT NULL,
+
+    -- RAW FEATURES
     hpi_benchmark       DOUBLE PRECISION,
     rent_avg_city       DOUBLE PRECISION,
     mortgage_rate       DOUBLE PRECISION,
     unemployment_rate   DOUBLE PRECISION,
     overnight_rate      DOUBLE PRECISION,
-    population          BIGINT,
+    population          DOUBLE PRECISION,
     median_income       DOUBLE PRECISION,
     migration_rate      DOUBLE PRECISION,
     gdp_growth          DOUBLE PRECISION,
     cpi_yoy             DOUBLE PRECISION,
 
-    -- scaled (normalized 0–1) features
-    hpi_benchmark_scaled    DOUBLE PRECISION,
-    rent_avg_city_scaled    DOUBLE PRECISION,
-    mortgage_rate_scaled    DOUBLE PRECISION,
-    unemployment_rate_scaled DOUBLE PRECISION,
-    overnight_rate_scaled   DOUBLE PRECISION,
-    population_scaled       DOUBLE PRECISION,
-    median_income_scaled    DOUBLE PRECISION,
-    migration_rate_scaled   DOUBLE PRECISION,
-    gdp_growth_scaled       DOUBLE PRECISION,
-    cpi_yoy_scaled          DOUBLE PRECISION,
+    -- LEGACY YOY FEATURES
+    hpi_change_yoy          DOUBLE PRECISION,
+    rent_change_yoy         DOUBLE PRECISION,
 
-    source              TEXT,
-    created_at          TIMESTAMP DEFAULT NOW(),
+    -- PROPERTY TYPE INPUT FEATURE
+    property_type_id        INTEGER,   -- 0=Apartment, 1=House, 2=Town House
 
-    CONSTRAINT model_features_pk PRIMARY KEY (date, city)
+    -- LEGACY COMPOSITE SCALED FEATURES
+    hpi_scaled              DOUBLE PRECISION,
+    rent_scaled             DOUBLE PRECISION,
+    macro_scaled            DOUBLE PRECISION,
+    demographics_scaled     DOUBLE PRECISION,
+
+    -- EXISTING INDIVIDUAL SCALED FEATURES (KEEPING FOR FULL COMPATIBILITY)
+    hpi_benchmark_scaled        DOUBLE PRECISION,
+    rent_avg_city_scaled        DOUBLE PRECISION,
+    mortgage_rate_scaled        DOUBLE PRECISION,
+    unemployment_rate_scaled    DOUBLE PRECISION,
+    overnight_rate_scaled       DOUBLE PRECISION,
+    population_scaled           DOUBLE PRECISION,
+    median_income_scaled        DOUBLE PRECISION,
+    migration_rate_scaled       DOUBLE PRECISION,
+    gdp_growth_scaled           DOUBLE PRECISION,
+    cpi_yoy_scaled              DOUBLE PRECISION,
+
+    features_version        TEXT,
+    created_at              TIMESTAMPTZ DEFAULT NOW(),
+
+    PRIMARY KEY (date, city)
 );
 
-COMMENT ON TABLE public.model_features IS
-'Contains scaled numeric features derived from the features table for use in forecasting models.';
 
 -- -----------------------------------------------------------------------------
 -- Serving-layer predictions cache
