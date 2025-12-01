@@ -118,6 +118,20 @@ def train_prophet_for_group(df, city, ptype, target_name, col_name):
 
     g = df[(df.city == city) & (df.property_type == ptype)].sort_values("date")
 
+    # ------------------------------------------------------
+    # REMOVE ROWS WITH NaN REGRESSORS (Prophet requirement)
+    # Drop first 12 months because lag/roll features incomplete
+    # ------------------------------------------------------
+    g = g.copy()
+    g = g.iloc[12:]   # drop first year where NaNs appear
+
+    # Drop any remaining NaNs in regressors
+    g = g.dropna(subset=REGRESSOR_COLS + ["hpi_benchmark", "rent_avg_city"])
+    if g.empty:
+        print(f"[WARN] No valid rows after NaN cleaning for {city}/{ptype}/{target_name}")
+        return []
+
+
     # Prepare Prophet input
     p_df = g.rename(columns={"date": "ds", col_name: "y"})
 
