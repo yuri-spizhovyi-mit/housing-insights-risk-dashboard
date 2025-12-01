@@ -1,223 +1,174 @@
 """
 train_model_prophet_v1.py
 ----------------------------------------------------------
-Dual-target Prophet forecasting:
+CITY-LEVEL PROPHET FORECASTING (PHASE 2)
 
 Targets:
-- Home price  (target="price") → hpi_benchmark
-- Rent price  (target="rent")  → rent_avg_city
+- price (hpi_raw)
+- rent  (rent_raw)
 
-For each (city, property_type):
-- Train: 2005–2020
-- Validate: 2020–2025
-- Forecast: 2025–2035 (120 months)
+Regressors (Option A):
+- macro_z
+- demo_z
 
-Writes predictions to public.model_predictions with correct schema.
+Forecast:
+- 120 months ahead (2025 → 2035)
 """
 
 import pandas as pd
 import numpy as np
 import uuid
 from datetime import datetime, timezone
-from prophet import Prophet
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv, find_dotenv
-import warnings
 import os
+import warnings
+from prophet import Prophet
 
 warnings.filterwarnings("ignore")
 
-# ----------------------------------------------------------
+
+# ---------------------------------------------------------
 # ENVIRONMENT
-# ----------------------------------------------------------
+# ---------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("NEON_DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
 
-# ----------------------------------------------------------
-# LOAD model_features (NOT public.features)
-# ----------------------------------------------------------
-def load_model_features():
+# ---------------------------------------------------------
+# LOAD MODEL FEATURES (CITY-LEVEL)
+# ---------------------------------------------------------
+def load_city_features():
     q = """
         SELECT
             date,
             city,
-            property_type,
-            hpi_benchmark,
-            rent_avg_city,
-            hpi_z,
-            rent_z,
-            macro_composite_z,
-            demographics_composite_z,
-            hpi_change_yoy,
-            rent_change_yoy,
-            lag_1,
-            lag_3,
-            lag_6,
-            lag_12,
-            roll_3,
-            roll_6,
-            roll_12
+            hpi_raw,
+            rent_raw,
+            macro_z,
+            demo_z
         FROM public.model_features
-        ORDER BY city, property_type, date;
+        ORDER BY city, date;
     """
     df = pd.read_sql(q, engine)
     df["date"] = pd.to_datetime(df["date"])
-    print(f"[INFO] Loaded {len(df)} rows from model_features")
     return df
 
 
-# ----------------------------------------------------------
-# VALIDATION METRICS
-# ----------------------------------------------------------
-def mae(y_true, y_pred):
-    return float(np.mean(np.abs(y_true - y_pred)))
+# ---------------------------------------------------------
+# TRAIN PROPHET FOR ONE CITY & TARGET
+# ---------------------------------------------------------
+def train_prophet_for_city(df, city, target_col, target_name):
 
+    g = df[df.city == city].sort_values("date").copy()
 
-def mape(y_true, y_pred):
-    return float(np.mean(np.abs((y_true - y_pred) / y_true))) * 100
-
-
-# ----------------------------------------------------------
-# Prophet model builder (with regressors)
-# ----------------------------------------------------------
-def build_prophet_model():
-    model = Prophet(
-        yearly_seasonality=True,
-        changepoint_prior_scale=0.08,
-        interval_width=0.90,
-    )
-    return model
-
-
-# ----------------------------------------------------------
-# Add regressors to Prophet
-# ----------------------------------------------------------
-REGRESSOR_COLS = [
-    "hpi_z",
-    "rent_z",
-    "macro_composite_z",
-    "demographics_composite_z",
-    "hpi_change_yoy",
-    "rent_change_yoy",
-    "lag_1",
-    "lag_3",
-    "lag_6",
-    "lag_12",
-    "roll_3",
-    "roll_6",
-    "roll_12",
-]
-
-
-# ----------------------------------------------------------
-# Training logic per (city, property_type, target)
-# ----------------------------------------------------------
-def train_prophet_for_group(df, city, ptype, target_name, col_name):
-    g = df[(df.city == city) & (df.property_type == ptype)].sort_values("date")
-
-    # ------------------------------------------------------
-    # REMOVE ROWS WITH NaN REGRESSORS (Prophet requirement)
-    # Drop first 12 months because lag/roll features incomplete
-    # ------------------------------------------------------
-    g = g.copy()
-    g = g.iloc[12:]  # drop first year where NaNs appear
-
-    # Drop any remaining NaNs in regressors
-    g = g.dropna(subset=REGRESSOR_COLS + ["hpi_benchmark", "rent_avg_city"])
-    if g.empty:
-        print(
-            f"[WARN] No valid rows after NaN cleaning for {city}/{ptype}/{target_name}"
-        )
+    if len(g) < 50:
+        print(f"[WARN] Too little data for {city}/{target_name}")
         return []
 
-    # Prepare Prophet input
-    p_df = g.rename(columns={"date": "ds", col_name: "y"})
+    # -------------------------------------------
+    # PREPARE DATAFRAME IN PROPHET FORMAT
+    # -------------------------------------------
+    df_p = pd.DataFrame({
+        "ds": g["date"],
+        "y": g[target_col],
+        "macro_z": g["macro_z"],
+        "demo_z": g["demo_z"]
+    })
 
-    # Train/validation split
-    train = p_df[p_df.ds <= "2020-12-01"]
-    valid = p_df[(p_df.ds > "2020-12-01") & (p_df.ds <= "2025-12-01")]
+    # -------------------------------------------
+    # DEFINE PROPHET MODEL
+    # -------------------------------------------
+    model = Prophet(
+        yearly_seasonality=True,
+        weekly_seasonality=False,
+        daily_seasonality=False,
+        seasonality_mode="additive"
+    )
 
-    # ------------------------- MODEL BUILD -------------------------
-    model = build_prophet_model()
+    # add regressors
+    model.add_regressor("macro_z")
+    model.add_regressor("demo_z")
 
-    # Add regressors
-    for col in REGRESSOR_COLS:
-        model.add_regressor(col)
+    # -------------------------------------------
+    # FIT MODEL
+    # -------------------------------------------
+    model.fit(df_p)
 
-    # Train
-    model.fit(train[["ds", "y"] + REGRESSOR_COLS])
+    # -------------------------------------------
+    # MAKE FUTURE DATAFRAME (120 MONTHS)
+    # -------------------------------------------
+    future = model.make_future_dataframe(periods=120, freq="MS")
 
-    # ------------------------- VALIDATION -------------------------
-    if not valid.empty:
-        fc_valid = model.predict(valid[["ds"] + REGRESSOR_COLS])
-        v_mae = mae(valid["y"], fc_valid["yhat"])
-        v_mape = mape(valid["y"], fc_valid["yhat"])
-        print(
-            f"[VAL] {city}/{ptype}/{target_name}: MAE={v_mae:,.0f}, MAPE={v_mape:.2f}%"
-        )
+    # merge regressors for future
+    last_macro = g["macro_z"].iloc[-1]
+    last_demo = g["demo_z"].iloc[-1]
 
-    # ------------------------- RETRAIN ON FULL DATA -------------------------
-    full_model = build_prophet_model()
-    for col in REGRESSOR_COLS:
-        full_model.add_regressor(col)
+    future["macro_z"] = last_macro
+    future["demo_z"] = last_demo
 
-    full_model.fit(p_df[["ds", "y"] + REGRESSOR_COLS])
+    # -------------------------------------------
+    # FORECAST
+    # -------------------------------------------
+    fc = model.predict(future)
 
-    # ------------------------- FORECAST 120 MONTHS -------------------------
-    future = full_model.make_future_dataframe(periods=120, freq="MS")
-
-    # Merge regressors (extend with last known values)
-    last_vals = g.iloc[-1:][REGRESSOR_COLS].to_dict(orient="records")[0]
-    future_reg = pd.DataFrame([last_vals] * len(future))
-
-    future_fc = full_model.predict(pd.concat([future, future_reg], axis=1))
-
-    last_date = g["date"].max()
+    # -------------------------------------------
+    # COLLECT ONLY FUTURE FORECASTS
+    # -------------------------------------------
+    fc_future = fc[fc["ds"] > g["date"].max()].reset_index(drop=True)
 
     rows = []
 
-    for i in range(120):
-        pred_row = future_fc.iloc[len(p_df) + i]
+    for i, row in fc_future.iterrows():
 
-        forecast_date = last_date + pd.DateOffset(months=i + 1)
+        # clamp negative outputs
+        y_raw = max(0.0, float(row["yhat"]))
+        lo_raw = max(0.0, float(row["yhat_lower"]))
+        hi_raw = max(0.0, float(row["yhat_upper"]))
 
-        rows.append(
-            {
-                "run_id": str(uuid.uuid4()),
-                "model_name": "prophet_v1",
-                "target": target_name,
-                "horizon_months": i + 1,
-                "city": city,
-                "property_type": ptype,
-                "beds": None,
-                "baths": None,
-                "sqft_min": None,
-                "sqft_max": None,
-                "year_built_min": None,
-                "year_built_max": None,
-                "predict_date": forecast_date,
-                "yhat": float(pred_row["yhat"]),
-                "yhat_lower": float(pred_row["yhat_lower"]),
-                "yhat_upper": float(pred_row["yhat_upper"]),
-                "features_version": "model_features_v1",
-                "model_artifact_uri": None,
-                "created_at": datetime.now(timezone.utc),
-                "is_micro": False,
-            }
-        )
+        # round to dollars
+        y = int(round(y_raw))
+        lo = int(round(lo_raw))
+        hi = int(round(hi_raw))
 
-    print(f"[OK] Prophet forecast for {city}/{ptype}/{target_name} (120 months)")
+        rows.append({
+            "run_id": str(uuid.uuid4()),
+            "model_name": "prophet_v1",
+            "target": target_name,
+            "horizon_months": i + 1,
+
+            "city": city,
+            "property_type": None,
+            "beds": None,
+            "baths": None,
+            "sqft_min": None,
+            "sqft_max": None,
+            "year_built_min": None,
+            "year_built_max": None,
+
+            "predict_date": row["ds"],
+            "yhat": y,
+            "yhat_lower": lo,
+            "yhat_upper": hi,
+
+            "features_version": "model_features_city_v1",
+            "model_artifact_uri": None,
+            "created_at": datetime.now(timezone.utc),
+
+            "is_micro": False
+        })
+
+    print(f"[OK] Prophet forecast created for {city}/{target_name}")
     return rows
 
 
-# ----------------------------------------------------------
-# INSERT INTO model_predictions
-# ----------------------------------------------------------
+# ---------------------------------------------------------
+# WRITE TO DATABASE
+# ---------------------------------------------------------
 def write_predictions(rows):
     if not rows:
-        print("[WARN] No rows to insert.")
+        print("[WARN] No predictions to write.")
         return
 
     sql = text("""
@@ -244,31 +195,31 @@ def write_predictions(rows):
     with engine.begin() as conn:
         conn.execute(sql, rows)
 
-    print(f"[OK] Inserted {len(rows)} Prophet predictions.")
+    print(f"[OK] Inserted {len(rows)} Prophet v1 predictions.")
 
 
-# ----------------------------------------------------------
-# Entrypoint
-# ----------------------------------------------------------
+# ---------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------
 def main():
-    print("[DEBUG] Starting Prophet v1...")
+    print("[DEBUG] Starting Prophet v1 training...")
 
-    df = load_model_features()
-
+    df = load_city_features()
     all_rows = []
 
-    for (city, ptype), _ in df.groupby(["city", "property_type"]):
-        # Home Price
-        rows_price = train_prophet_for_group(df, city, ptype, "price", "hpi_benchmark")
-        all_rows.extend(rows_price)
+    for city in df.city.unique():
 
-        # Rent Price
-        rows_rent = train_prophet_for_group(df, city, ptype, "rent", "rent_avg_city")
+        # price forecast
+        rows_hpi = train_prophet_for_city(df, city, "hpi_raw", "price")
+        all_rows.extend(rows_hpi)
+
+        # rent forecast
+        rows_rent = train_prophet_for_city(df, city, "rent_raw", "rent")
         all_rows.extend(rows_rent)
 
     write_predictions(all_rows)
 
-    print("[DONE] Prophet v1 completed.")
+    print("[DONE] Prophet v1 completed successfully.")
 
 
 if __name__ == "__main__":

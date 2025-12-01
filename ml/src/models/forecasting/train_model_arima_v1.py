@@ -4,15 +4,14 @@ train_model_arima_v1.py
 CITY-LEVEL ARIMA FORECASTING (PHASE 2)
 
 Targets:
-- price (city-level HPI)
-- rent  (city-level rent)
+- price (hpi_raw)
+- rent  (rent_raw)
 
-Per city:
-- Train: all data <= 2020-12-01
-- Validate: 2021-01-01 → 2025-12-01
-- Forecast: 120 months ahead (2025–2035)
-
-Writes predictions into public.model_predictions.
+This version includes:
+✔ safe numpy casting
+✔ clamping negative values to 0
+✔ rounding yhat, yhat_lower, yhat_upper to integers
+✔ UI-ready outputs
 """
 
 import pandas as pd
@@ -44,8 +43,8 @@ def load_city_features():
         SELECT
             date,
             city,
-            hpi,
-            rent
+            hpi_raw,
+            rent_raw
         FROM public.model_features
         ORDER BY city, date;
     """
@@ -60,8 +59,7 @@ def load_city_features():
 # ---------------------------------------------------------
 def train_arima_series(series):
     """
-    Fit AutoARIMA on the given 1D city-level series.
-    Always returns a trained pmdarima model.
+    Fit AutoARIMA on a 1D raw target series.
     """
     model = pm.auto_arima(
         series,
@@ -94,9 +92,7 @@ def train_arima_for_city(df, city, target_col, target_name):
 
     g = df[df.city == city].sort_values("date")
 
-    # -------------------------------------------
-    # TRAIN / VALIDATION SPLIT
-    # -------------------------------------------
+    # Split
     train = g[g.date <= "2020-12-01"]
     valid = g[(g.date > "2020-12-01") & (g.date <= "2025-12-01")]
 
@@ -104,36 +100,23 @@ def train_arima_for_city(df, city, target_col, target_name):
         print(f"[WARN] Not enough history for {city} {target_name}")
         return []
 
-    # -------------------------------------------
-    # TRAIN AUTO ARIMA
-    # -------------------------------------------
+    # Train on training portion
     model = train_arima_series(train[target_col])
 
-    # -------------------------------------------
-    # VALIDATION
-    # -------------------------------------------
+    # Validation
     if len(valid) > 0:
-        pred_val = model.predict(n_periods=len(valid))
-        pred_val = np.asarray(pred_val).reshape(-1)
-
+        pred_val = np.asarray(model.predict(n_periods=len(valid))).reshape(-1)
         v_mae = mae(valid[target_col].values, pred_val)
         v_mape = mape(valid[target_col].values, pred_val)
         print(f"[VAL] {city}/{target_name}: MAE={v_mae:.0f}, MAPE={v_mape:.2f}%")
 
-    # -------------------------------------------
-    # RETRAIN ON FULL CITY HISTORY
-    # -------------------------------------------
+    # Retrain on full history
     model_final = train_arima_series(g[target_col])
 
-    # -------------------------------------------
-    # FORECAST 120 MONTHS AHEAD
-    # -------------------------------------------
-    fc, conf = model_final.predict(
-        n_periods=120,
-        return_conf_int=True
-    )
+    # Forecast 120 months ahead
+    fc, conf = model_final.predict(n_periods=120, return_conf_int=True)
 
-    # ❗ SAFETY CONVERSION — THE FIX
+    # Safe casting
     fc = np.asarray(fc).reshape(-1)
     conf = np.asarray(conf).reshape(-1, 2)
 
@@ -143,30 +126,45 @@ def train_arima_for_city(df, city, target_col, target_name):
     for i in range(120):
         forecast_date = start_date + pd.DateOffset(months=i + 1)
 
-        y = float(fc[i])
-        lo = float(conf[i, 0])
-        hi = float(conf[i, 1])
+        # raw predictions
+        y_raw = float(fc[i])
+        lo_raw = float(conf[i, 0])
+        hi_raw = float(conf[i, 1])
+
+        # clamp negative values
+        y_raw = max(0.0, y_raw)
+        lo_raw = max(0.0, lo_raw)
+        hi_raw = max(0.0, hi_raw)
+
+        # round to whole dollars
+        y = int(round(y_raw))
+        lo = int(round(lo_raw))
+        hi = int(round(hi_raw))
 
         rows.append({
             "run_id": str(uuid.uuid4()),
             "model_name": "arima_v1",
-            "target": target_name,      # "price" or "rent"
+            "target": target_name,
             "horizon_months": i + 1,
+
             "city": city,
-            "property_type": None,      # None = city-level model
+            "property_type": None,
             "beds": None,
             "baths": None,
             "sqft_min": None,
             "sqft_max": None,
             "year_built_min": None,
             "year_built_max": None,
+
             "predict_date": forecast_date,
             "yhat": y,
             "yhat_lower": lo,
             "yhat_upper": hi,
+
             "features_version": "model_features_city_v1",
             "model_artifact_uri": None,
             "created_at": datetime.now(timezone.utc),
+
             "is_micro": False
         })
 
@@ -193,7 +191,7 @@ def write_predictions(rows):
             created_at, is_micro
         )
         VALUES (
-            :run_id, :model_name, :target, :horizon_monthths,
+            :run_id, :model_name, :target, :horizon_months,
             :city, :property_type,
             :beds, :baths, :sqft_min, :sqft_max,
             :year_built_min, :year_built_max,
@@ -202,9 +200,6 @@ def write_predictions(rows):
             :created_at, :is_micro
         );
     """)
-
-    # Correction: horizon_monthths -> horizon_months
-    sql = text(sql.text.replace("horizon_monthths", "horizon_months"))
 
     with engine.begin() as conn:
         conn.execute(sql, rows)
@@ -222,13 +217,12 @@ def main():
     all_rows = []
 
     for city in df.city.unique():
-
-        # city-level price forecast
-        rows_hpi = train_arima_for_city(df, city, "hpi", "price")
+        # forecast prices
+        rows_hpi = train_arima_for_city(df, city, "hpi_raw", "price")
         all_rows.extend(rows_hpi)
 
-        # city-level rent forecast
-        rows_rent = train_arima_for_city(df, city, "rent", "rent")
+        # forecast rent
+        rows_rent = train_arima_for_city(df, city, "rent_raw", "rent")
         all_rows.extend(rows_rent)
 
     write_predictions(all_rows)
