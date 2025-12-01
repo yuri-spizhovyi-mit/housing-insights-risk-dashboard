@@ -115,7 +115,6 @@ REGRESSOR_COLS = [
 # Training logic per (city, property_type, target)
 # ----------------------------------------------------------
 def train_prophet_for_group(df, city, ptype, target_name, col_name):
-
     g = df[(df.city == city) & (df.property_type == ptype)].sort_values("date")
 
     # ------------------------------------------------------
@@ -123,14 +122,15 @@ def train_prophet_for_group(df, city, ptype, target_name, col_name):
     # Drop first 12 months because lag/roll features incomplete
     # ------------------------------------------------------
     g = g.copy()
-    g = g.iloc[12:]   # drop first year where NaNs appear
+    g = g.iloc[12:]  # drop first year where NaNs appear
 
     # Drop any remaining NaNs in regressors
     g = g.dropna(subset=REGRESSOR_COLS + ["hpi_benchmark", "rent_avg_city"])
     if g.empty:
-        print(f"[WARN] No valid rows after NaN cleaning for {city}/{ptype}/{target_name}")
+        print(
+            f"[WARN] No valid rows after NaN cleaning for {city}/{ptype}/{target_name}"
+        )
         return []
-
 
     # Prepare Prophet input
     p_df = g.rename(columns={"date": "ds", col_name: "y"})
@@ -154,7 +154,9 @@ def train_prophet_for_group(df, city, ptype, target_name, col_name):
         fc_valid = model.predict(valid[["ds"] + REGRESSOR_COLS])
         v_mae = mae(valid["y"], fc_valid["yhat"])
         v_mape = mape(valid["y"], fc_valid["yhat"])
-        print(f"[VAL] {city}/{ptype}/{target_name}: MAE={v_mae:,.0f}, MAPE={v_mape:.2f}%")
+        print(
+            f"[VAL] {city}/{ptype}/{target_name}: MAE={v_mae:,.0f}, MAPE={v_mape:.2f}%"
+        )
 
     # ------------------------- RETRAIN ON FULL DATA -------------------------
     full_model = build_prophet_model()
@@ -256,7 +258,6 @@ def main():
     all_rows = []
 
     for (city, ptype), _ in df.groupby(["city", "property_type"]):
-
         # Home Price
         rows_price = train_prophet_for_group(df, city, ptype, "price", "hpi_benchmark")
         all_rows.extend(rows_price)

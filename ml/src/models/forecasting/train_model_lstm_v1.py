@@ -104,8 +104,8 @@ def create_dataset(df, feature_cols, target_col, window=24):
 
     for i in range(len(values) - window):
         window_slice = values[i : i + window]
-        X.append(window_slice[:, :-1])   # all features but target
-        y.append(values[i + window, -1]) # next month's target
+        X.append(window_slice[:, :-1])  # all features but target
+        y.append(values[i + window, -1])  # next month's target
 
     return np.array(X), np.array(y)
 
@@ -115,7 +115,14 @@ def create_dataset(df, feature_cols, target_col, window=24):
 # ==========================================================
 def build_lstm_model(n_features, window=24):
     model = Sequential()
-    model.add(LSTM(64, activation="tanh", return_sequences=False, input_shape=(window, n_features)))
+    model.add(
+        LSTM(
+            64,
+            activation="tanh",
+            return_sequences=False,
+            input_shape=(window, n_features),
+        )
+    )
     model.add(Dropout(0.2))
     model.add(Dense(32, activation="relu"))
     model.add(Dense(1))
@@ -128,7 +135,6 @@ def build_lstm_model(n_features, window=24):
 # TRAIN + VALIDATE + FORECAST
 # ==========================================================
 def train_lstm_for_group(df, city, ptype, target_name, target_col):
-
     g = df[(df.city == city) & (df.property_type == ptype)].sort_values("date")
 
     # Drop first 12 rows (NaNs in lag/roll)
@@ -162,12 +168,13 @@ def train_lstm_for_group(df, city, ptype, target_name, target_col):
     print(f"[TRAIN] LSTM {city}/{ptype}/{target_name}: X_train={X_train.shape}")
 
     model.fit(
-        X_train, y_train,
+        X_train,
+        y_train,
         validation_data=(X_val, y_val) if len(X_val) > 0 else None,
         epochs=120,
         batch_size=16,
         callbacks=[es],
-        verbose=0
+        verbose=0,
     )
 
     # -------------------------------------------
@@ -182,7 +189,6 @@ def train_lstm_for_group(df, city, ptype, target_name, target_col):
     last_date = g["date"].max()
 
     for horizon in range(1, 121):
-
         # Predict next month
         yhat = model.predict(last_window, verbose=0)[0][0]
 
@@ -278,7 +284,6 @@ def main():
     all_rows = []
 
     for (city, ptype), _ in df.groupby(["city", "property_type"]):
-
         # HOME PRICE
         rows_price = train_lstm_for_group(df, city, ptype, "price", "hpi_benchmark")
         all_rows.extend(rows_price)

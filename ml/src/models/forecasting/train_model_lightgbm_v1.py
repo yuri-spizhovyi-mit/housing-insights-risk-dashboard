@@ -273,7 +273,6 @@ def main():
     all_rows = []
 
     for (city, ptype), _ in df.groupby(["city", "property_type"]):
-
         # Home Price
         rows_price = train_lightgbm_for_group(df, city, ptype, "price", "hpi_benchmark")
         all_rows.extend(rows_price)

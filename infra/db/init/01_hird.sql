@@ -218,52 +218,61 @@ COMMENT ON TABLE public.features IS
 DROP TABLE IF EXISTS public.model_features;
 
 CREATE TABLE public.model_features (
-    date                DATE NOT NULL,
-    city                TEXT NOT NULL,
+    date DATE NOT NULL,
+    city TEXT NOT NULL,
 
-    -- RAW FEATURES
-    hpi_benchmark       DOUBLE PRECISION,
-    rent_avg_city       DOUBLE PRECISION,
-    mortgage_rate       DOUBLE PRECISION,
-    unemployment_rate   DOUBLE PRECISION,
-    overnight_rate      DOUBLE PRECISION,
-    population          DOUBLE PRECISION,
-    median_income       DOUBLE PRECISION,
-    migration_rate      DOUBLE PRECISION,
-    gdp_growth          DOUBLE PRECISION,
-    cpi_yoy             DOUBLE PRECISION,
+    -- RAW TARGETS
+    hpi_raw DOUBLE PRECISION,
+    rent_raw DOUBLE PRECISION,
 
-    -- LEGACY YOY FEATURES
-    hpi_change_yoy          DOUBLE PRECISION,
-    rent_change_yoy         DOUBLE PRECISION,
+    -- MACRO / DEMO RAW
+    mortgage_rate DOUBLE PRECISION,
+    unemployment_rate DOUBLE PRECISION,
+    overnight_rate DOUBLE PRECISION,
+    population DOUBLE PRECISION,
+    median_income DOUBLE PRECISION,
+    migration_rate DOUBLE PRECISION,
+    gdp_growth DOUBLE PRECISION,
+    cpi_yoy DOUBLE PRECISION,
 
-    -- PROPERTY TYPE INPUT FEATURE
-    property_type_id        INTEGER,   -- 0=Apartment, 1=House, 2=Town House
+    -- YOY FEATURES
+    hpi_yoy DOUBLE PRECISION,
+    rent_yoy DOUBLE PRECISION,
 
-    -- LEGACY COMPOSITE SCALED FEATURES
-    hpi_scaled              DOUBLE PRECISION,
-    rent_scaled             DOUBLE PRECISION,
-    macro_scaled            DOUBLE PRECISION,
-    demographics_scaled     DOUBLE PRECISION,
+    -- LAGS
+    hpi_lag_1 DOUBLE PRECISION,
+    rent_lag_1 DOUBLE PRECISION,
+    hpi_lag_3 DOUBLE PRECISION,
+    rent_lag_3 DOUBLE PRECISION,
+    hpi_lag_6 DOUBLE PRECISION,
+    rent_lag_6 DOUBLE PRECISION,
+    hpi_lag_12 DOUBLE PRECISION,
+    rent_lag_12 DOUBLE PRECISION,
 
-    -- EXISTING INDIVIDUAL SCALED FEATURES (KEEPING FOR FULL COMPATIBILITY)
-    hpi_benchmark_scaled        DOUBLE PRECISION,
-    rent_avg_city_scaled        DOUBLE PRECISION,
-    mortgage_rate_scaled        DOUBLE PRECISION,
-    unemployment_rate_scaled    DOUBLE PRECISION,
-    overnight_rate_scaled       DOUBLE PRECISION,
-    population_scaled           DOUBLE PRECISION,
-    median_income_scaled        DOUBLE PRECISION,
-    migration_rate_scaled       DOUBLE PRECISION,
-    gdp_growth_scaled           DOUBLE PRECISION,
-    cpi_yoy_scaled              DOUBLE PRECISION,
+    -- ROLLING
+    hpi_roll_3 DOUBLE PRECISION,
+    rent_roll_3 DOUBLE PRECISION,
+    hpi_roll_6 DOUBLE PRECISION,
+    rent_roll_6 DOUBLE PRECISION,
+    hpi_roll_12 DOUBLE PRECISION,
+    rent_roll_12 DOUBLE PRECISION,
 
-    features_version        TEXT,
-    created_at              TIMESTAMPTZ DEFAULT NOW(),
+    -- RAW COMPOSITES
+    macro_raw DOUBLE PRECISION,
+    demo_raw DOUBLE PRECISION,
 
-    PRIMARY KEY (date, city)
+    -- Z-SCORED FEATURES
+    hpi_z DOUBLE PRECISION,
+    rent_z DOUBLE PRECISION,
+    hpi_yoy_z DOUBLE PRECISION,
+    rent_yoy_z DOUBLE PRECISION,
+    macro_z DOUBLE PRECISION,
+    demo_z DOUBLE PRECISION,
+
+    -- METADATA
+    etl_version TEXT,
+    processed_at TIMESTAMPTZ
 );
-
 
 -- -----------------------------------------------------------------------------
 -- Serving-layer predictions cache
