@@ -218,14 +218,12 @@ COMMENT ON TABLE public.features IS
 DROP TABLE IF EXISTS public.model_features;
 
 CREATE TABLE public.model_features (
-    date DATE NOT NULL,
     city TEXT NOT NULL,
+    date DATE NOT NULL,
 
-    -- RAW TARGETS
-    hpi_raw DOUBLE PRECISION,
-    rent_raw DOUBLE PRECISION,
-
-    -- MACRO / DEMO RAW
+    -- core raw features
+    hpi_benchmark DOUBLE PRECISION,
+    rent_avg_city DOUBLE PRECISION,
     mortgage_rate DOUBLE PRECISION,
     unemployment_rate DOUBLE PRECISION,
     overnight_rate DOUBLE PRECISION,
@@ -235,44 +233,43 @@ CREATE TABLE public.model_features (
     gdp_growth DOUBLE PRECISION,
     cpi_yoy DOUBLE PRECISION,
 
-    -- YOY FEATURES
-    hpi_yoy DOUBLE PRECISION,
-    rent_yoy DOUBLE PRECISION,
+    -- YoY features
+    hpi_benchmark_yoy DOUBLE PRECISION,
+    rent_avg_city_yoy DOUBLE PRECISION,
 
-    -- LAGS
-    hpi_lag_1 DOUBLE PRECISION,
-    rent_lag_1 DOUBLE PRECISION,
-    hpi_lag_3 DOUBLE PRECISION,
-    rent_lag_3 DOUBLE PRECISION,
-    hpi_lag_6 DOUBLE PRECISION,
-    rent_lag_6 DOUBLE PRECISION,
-    hpi_lag_12 DOUBLE PRECISION,
-    rent_lag_12 DOUBLE PRECISION,
+    -- lag features
+    lag_1 DOUBLE PRECISION,
+    lag_3 DOUBLE PRECISION,
+    lag_6 DOUBLE PRECISION,
 
-    -- ROLLING
-    hpi_roll_3 DOUBLE PRECISION,
-    rent_roll_3 DOUBLE PRECISION,
-    hpi_roll_6 DOUBLE PRECISION,
-    rent_roll_6 DOUBLE PRECISION,
-    hpi_roll_12 DOUBLE PRECISION,
-    rent_roll_12 DOUBLE PRECISION,
+    -- rolling features
+    roll_3 DOUBLE PRECISION,
+    roll_6 DOUBLE PRECISION,
 
-    -- RAW COMPOSITES
-    macro_raw DOUBLE PRECISION,
-    demo_raw DOUBLE PRECISION,
+    -- Z-score normalized features
+    hpi_benchmark_z DOUBLE PRECISION,
+    rent_avg_city_z DOUBLE PRECISION,
+    mortgage_rate_z DOUBLE PRECISION,
+    unemployment_rate_z DOUBLE PRECISION,
+    overnight_rate_z DOUBLE PRECISION,
+    population_z DOUBLE PRECISION,
+    median_income_z DOUBLE PRECISION,
+    migration_rate_z DOUBLE PRECISION,
+    gdp_growth_z DOUBLE PRECISION,
+    cpi_yoy_z DOUBLE PRECISION,
+    hpi_benchmark_yoy_z DOUBLE PRECISION,
+    rent_avg_city_yoy_z DOUBLE PRECISION,
+    lag_1_z DOUBLE PRECISION,
+    lag_3_z DOUBLE PRECISION,
+    lag_6_z DOUBLE PRECISION,
+    roll_3_z DOUBLE PRECISION,
+    roll_6_z DOUBLE PRECISION,
 
-    -- Z-SCORED FEATURES
-    hpi_z DOUBLE PRECISION,
-    rent_z DOUBLE PRECISION,
-    hpi_yoy_z DOUBLE PRECISION,
-    rent_yoy_z DOUBLE PRECISION,
-    macro_z DOUBLE PRECISION,
-    demo_z DOUBLE PRECISION,
-
-    -- METADATA
+    -- metadata
     etl_version TEXT,
-    processed_at TIMESTAMPTZ
+    processed_at TIMESTAMP WITH TIME ZONE
 );
+
 
 -- -----------------------------------------------------------------------------
 -- Serving-layer predictions cache
