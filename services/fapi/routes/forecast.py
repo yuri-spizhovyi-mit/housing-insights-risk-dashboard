@@ -29,7 +29,7 @@ def get_forecast(
             ModelPrediction.city == city,
             ModelPrediction.target == target,
             ModelPrediction.horizon_months == months,
-            ModelPrediction.model_name == model,
+            ModelPrediction.horizon_months.between(1, months),
         )
         .order_by(ModelPrediction.predict_date)
         .all()
