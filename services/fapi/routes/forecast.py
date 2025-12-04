@@ -14,70 +14,62 @@ def get_forecast(
     city: str,
     target: str = Query("price", enum=["price", "rent"]),
     horizon: str = Query("1y", enum=list(HORIZON_MAP.keys())),
+    model: str = Query("arima"),   # ⭐ NEW: allow selecting model directly
     propertyType: str | None = None,
-    beds: int | None = Query(-1, description="Number of beds, -1 = Any"),
-    baths: int | None = Query(-1, description="Number of baths, -1 = Any"),
-    sqftMin: int | None = None,
-    sqftMax: int | None = None,
-    yearBuiltMin: int | None = None,
-    yearBuiltMax: int | None = None,
+    beds: int | None = Query(-1),
+    baths: int | None = Query(-1),
     db: Session = Depends(get_db),
 ):
     months = HORIZON_MAP[horizon]
-    start_date = date.today()
-    end_date = start_date + timedelta(days=30 * months)
 
-    query = db.query(ModelPrediction).filter(
-        ModelPrediction.city == city,
-        ModelPrediction.target == target,
-        ModelPrediction.horizon_months == months,
-        ModelPrediction.predict_date >= start_date,
-        ModelPrediction.predict_date <= end_date,
+    # Load all rows for this horizon
+    rows = (
+        db.query(ModelPrediction)
+        .filter(
+            ModelPrediction.city == city,
+            ModelPrediction.target == target,
+            ModelPrediction.horizon_months == months,
+            ModelPrediction.model_name == model,
+        )
+        .order_by(ModelPrediction.predict_date)
+        .all()
     )
 
-    if propertyType:
-        query = query.filter(ModelPrediction.property_type == propertyType)
-
-    # Beds filter (default Any -> NULL)
-    if beds == -1:
-        query = query.filter(ModelPrediction.beds.is_(None))
-    else:
-        query = query.filter(ModelPrediction.beds == beds)
-
-    # Baths filter (default Any -> NULL)
-    if baths == -1:
-        query = query.filter(ModelPrediction.baths.is_(None))
-    else:
-        query = query.filter(ModelPrediction.baths == baths)
-
-    if sqftMin:
-        query = query.filter(ModelPrediction.sqft_min >= sqftMin)
-    if sqftMax:
-        query = query.filter(ModelPrediction.sqft_max <= sqftMax)
-    if yearBuiltMin:
-        query = query.filter(ModelPrediction.year_built_min >= yearBuiltMin)
-    if yearBuiltMax:
-        query = query.filter(ModelPrediction.year_built_max <= yearBuiltMax)
-
-    rows = query.order_by(ModelPrediction.predict_date).all()
-
     if not rows:
-        raise HTTPException(status_code=404, detail=f"No forecast data for {city}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No data for {city}, {target}, {horizon}, model={model}",
+        )
 
-    # Return only one row per date (dedup safeguard)
-    data_by_date = {}
-    for row in rows:
-        if row.predict_date not in data_by_date:
-            data_by_date[row.predict_date] = {
-                "date": row.predict_date.isoformat(),
-                "value": float(row.yhat),
-                "lower": float(row.yhat_lower) if row.yhat_lower is not None else None,
-                "upper": float(row.yhat_upper) if row.yhat_upper is not None else None,
-            }
+    # Build full list
+    full = [
+        {
+            "date": r.predict_date.isoformat(),
+            "value": float(r.yhat),
+            "lower": float(r.yhat_lower) if r.yhat_lower else None,
+            "upper": float(r.yhat_upper) if r.yhat_upper else None,
+        }
+        for r in rows
+    ]
+
+    # ⭐ Sampling logic
+    if months == 12:
+        # 1 year: return monthly (12 points)
+        sampled = full
+    elif months == 24:
+        # 2 years: every second month → select indexes 0, 2, 4...
+        sampled = full[::2]
+    elif months >= 60:
+        # 5 years or 10 years: return 12 evenly spaced points
+        step = max(1, len(full) // 12)
+        sampled = full[::step][:12]
+    else:
+        sampled = full
 
     return {
         "city": city,
         "target": target,
         "horizon": months,
-        "data": list(data_by_date.values()),
+        "model": model,
+        "data": sampled,
     }

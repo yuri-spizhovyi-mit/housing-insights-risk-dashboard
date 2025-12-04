@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore")
 # ENVIRONMENT
 # ---------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("NEON_DATABASE_URL")
+DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
 
@@ -92,7 +92,7 @@ def forecast_city_target(df, city, target_col, target_name):
 
         rows.append({
             "run_id": str(uuid.uuid4()),
-            "model_name": "arima",
+            "model_name": "arima1",
             "target": target_name,
             "horizon_months": h + 1,
             "city": city,
