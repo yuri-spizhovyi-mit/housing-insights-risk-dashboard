@@ -1,182 +1,136 @@
 # ================================================================
-# build_historical_dataset.py — Fixed v4
+# build_historical_dataset.py — Final (city-month panel, 2005+)
 # ------------------------------------------------
-# Handles column name collisions (e.g., hpi_composite_sa from features vs HPI),
-# joins on (city, date), and coalesces duplicates safely.
+# - Uses HOUSE PRICE INDEX (Composite_Benchmark) as target in CAD
+# - Joins clean sources: house_price_index, rent_index, macro_economic_data, demographics
+# - NO dependency on legacy 'features' or 'listings_features' tables
+# - Saves to data/historical_features.parquet
 # ================================================================
+
+import os
+from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import create_engine, text
-from pathlib import Path
-import os
-from datetime import datetime
 
 
-# ---------------------------------------------------------------
-# 🔌 Database connection
-# ---------------------------------------------------------------
 def get_engine():
     db_url = os.getenv(
         "DATABASE_URL",
         "postgresql+psycopg2://postgres:postgres@localhost:5433/hird",
     )
     print(f"[DEBUG] Connecting to DB → {db_url}")
-    return create_engine(db_url, future=True)
+    return create_engine(db_url, future=True, pool_pre_ping=True)
 
 
-# ---------------------------------------------------------------
-# 🧰 Utilities
-# ---------------------------------------------------------------
-def coalesce_cols(df: pd.DataFrame, cols: list[str], out: str) -> None:
-    present = [c for c in cols if c in df.columns]
-    if not present:
-        return
-    # create unified column
-    df[out] = df[present].bfill(axis=1).iloc[:, 0]
-    # drop the sources except the unified name if same
-    drop_cols = [c for c in present if c != out]
-    df.drop(columns=drop_cols, inplace=True, errors="ignore")
+def month_floor(s: pd.Series) -> pd.Series:
+    dt = pd.to_datetime(s, errors="coerce")
+    return dt.dt.to_period("M").dt.to_timestamp()  # month start
 
 
-# ---------------------------------------------------------------
-# 🧩 Build dataset
-# ---------------------------------------------------------------
-def build_historical_dataset(engine, lookback_years: int = 10) -> pd.DataFrame:
-    with engine.connect() as conn:
-        # 1️⃣ HPI (city-level). Use index_value and alias to avoid collision with features
-        hpi = pd.read_sql(
-            text(
-                """
-                SELECT date, city, index_value AS hpi_composite_sa_hpi
-                FROM public.house_price_index
-                WHERE measure = 'Composite'
-                  AND date > (CURRENT_DATE - interval ':yrs year')
-            """.replace(":yrs", str(lookback_years))
-            ),
-            conn,
+def build_historical_dataset(engine, lookback_years: int = 25) -> pd.DataFrame:
+    with engine.begin() as conn:
+        hpi_q = text(f"""
+            SELECT date, city, measure, index_value
+            FROM public.house_price_index
+            WHERE measure = 'Composite_Benchmark'
+              AND date > (CURRENT_DATE - interval '{lookback_years} year')
+        """)
+        hpi = pd.read_sql(hpi_q, conn)
+        if hpi.empty:
+            raise RuntimeError("house_price_index → no rows for Composite_Benchmark.")
+        hpi["date"] = month_floor(hpi["date"])
+        hpi = (
+            hpi.groupby(["city", "date"], as_index=False)["index_value"]
+            .mean()
+            .rename(columns={"index_value": "price_benchmark"})
         )
 
-        # 2️⃣ Rent Index (city-level)
-        rent = pd.read_sql(
-            text(
-                """
-                SELECT date, city, index_value AS rent_index_rent,
-                       median_rent_apartment_1br, median_rent_apartment_2br,
-                       median_rent_apartment_3br, active_rental_count, avg_rental_days
-                FROM public.rent_index
-                WHERE date > (CURRENT_DATE - interval ':yrs year')
-            """.replace(":yrs", str(lookback_years))
-            ),
-            conn,
-        )
+        rent_q = text(f"""
+            SELECT date, city,
+                   index_value AS rent_index,
+                   median_rent_apartment_1br,
+                   median_rent_apartment_2br,
+                   median_rent_apartment_3br
+            FROM public.rent_index
+            WHERE date > (CURRENT_DATE - interval '{lookback_years} year')
+        """)
+        rent = pd.read_sql(rent_q, conn)
+        rent["date"] = month_floor(rent["date"])
+        rent = rent.groupby(["city", "date"], as_index=False)[
+            [
+                "rent_index",
+                "median_rent_apartment_1br",
+                "median_rent_apartment_2br",
+                "median_rent_apartment_3br",
+            ]
+        ].mean()
 
-        # 3️⃣ Demographics (city-level)
-        demo = pd.read_sql(
-            text(
-                """
-                SELECT date, city, population, migration_rate,
-                       age_25_34_perc, median_income
-                FROM public.demographics
-                WHERE date > (CURRENT_DATE - interval ':yrs year')
-            """.replace(":yrs", str(lookback_years))
-            ),
-            conn,
-        )
+        demo_q = text(f"""
+            SELECT date, city, population, migration_rate,
+                   age_25_34_perc, median_income
+            FROM public.demographics
+            WHERE date > (CURRENT_DATE - interval '{lookback_years} year')
+        """)
+        demo = pd.read_sql(demo_q, conn)
+        if not demo.empty:
+            demo["date"] = month_floor(demo["date"])
+            demo = demo.groupby(["city", "date"], as_index=False)[
+                ["population", "migration_rate", "age_25_34_perc", "median_income"]
+            ].mean()
 
-        # 4️⃣ Macro (province-level mapped to 'city' column)
-        macro = pd.read_sql(
-            text(
-                """
-                SELECT date, city,
-                       unemployment_rate, gdp_growth_rate,
-                       prime_lending_rate, housing_starts
-                FROM public.macro_economic_data
-                WHERE date > (CURRENT_DATE - interval ':yrs year')
-            """.replace(":yrs", str(lookback_years))
-            ),
-            conn,
-        )
+        macro_q = text(f"""
+            SELECT date, city,
+                   unemployment_rate, gdp_growth_rate,
+                   prime_lending_rate, housing_starts
+            FROM public.macro_economic_data
+            WHERE date > (CURRENT_DATE - interval '{lookback_years} year')
+        """)
+        macro = pd.read_sql(macro_q, conn)
+        if not macro.empty:
+            macro["date"] = month_floor(macro["date"])
+            macro = macro.groupby(["city", "date"], as_index=False)[
+                [
+                    "unemployment_rate",
+                    "gdp_growth_rate",
+                    "prime_lending_rate",
+                    "housing_starts",
+                ]
+            ].mean()
 
-        # 5️⃣ Features (already includes some HPI/Rent; alias to *_feat to avoid collisions)
-        features = pd.read_sql(
-            text(
-                """
-                SELECT date, city,
-                       price_avg,
-                       rent_index        AS rent_index_feat,
-                       hpi_composite_sa  AS hpi_composite_sa_feat,
-                       bedrooms_avg, bathrooms_avg, sqft_avg, property_type,
-                       price_to_rent, price_mom_pct, rent_mom_pct, hpi_mom_pct
-                FROM public.features
-                WHERE date > (CURRENT_DATE - interval ':yrs year')
-            """.replace(":yrs", str(lookback_years))
-            ),
-            conn,
-        )
+    df = hpi.merge(rent, on=["city", "date"], how="left")
+    if not demo.empty:
+        df = df.merge(demo, on=["city", "date"], how="left")
+    if not macro.empty:
+        df = df.merge(macro, on=["city", "date"], how="left")
 
-    # -----------------------------------------------------------
-    # 🔗 Merge datasets by (city, date)
-    # -----------------------------------------------------------
-    df = (
-        features.merge(hpi, on=["city", "date"], how="left")
-        .merge(rent, on=["city", "date"], how="left")
-        .merge(demo, on=["city", "date"], how="left")
-        .merge(macro, on=["city", "date"], how="left")
-    )
+    df = df.sort_values(["city", "date"]).drop_duplicates(["city", "date"], keep="last")
 
-    # -----------------------------------------------------------
-    # ♻️ Coalesce duplicate semantic columns into unified names
-    # -----------------------------------------------------------
-    coalesce_cols(
-        df, ["hpi_composite_sa_feat", "hpi_composite_sa_hpi"], "hpi_composite_sa"
-    )
-    coalesce_cols(df, ["rent_index_feat", "rent_index_rent"], "rent_index")
-
-    # Basic ordering & de-dup
-    df = df.sort_values(["city", "date"]).drop_duplicates(
-        subset=["city", "date", "property_type"], keep="last"
-    )
-
-    # -----------------------------------------------------------
-    # 🧪 Sanity check: ensure target column exists
-    # -----------------------------------------------------------
-    if "hpi_composite_sa" not in df.columns:
-        raise KeyError(
-            f"After merge, 'hpi_composite_sa' not found. Available columns: {df.columns.tolist()}\n"
-            f"Hint: verify that house_price_index.index_value exists and features.hpi_composite_sa exists."
-        )
-
-    # -----------------------------------------------------------
-    # 🎯 Supervised targets (HPI ahead)
-    # -----------------------------------------------------------
-    for horizon, months in [(12, "12m"), (24, "24m"), (60, "5y"), (120, "10y")]:
-        df[f"target_hpi_{months}_ahead"] = df.groupby("city")["hpi_composite_sa"].shift(
+    for horizon, label in [(12, "12m"), (24, "24m"), (60, "5y"), (120, "10y")]:
+        df[f"target_price_{label}_ahead"] = df.groupby("city")["price_benchmark"].shift(
             -horizon
         )
 
-    # Filter rows that have the 12m-ahead target available
-    df = df.dropna(subset=["target_hpi_12m_ahead"]).copy()
-    df["created_at"] = datetime.now().astimezone()
+    df = df.dropna(subset=["target_price_12m_ahead"]).copy()
 
+    df["created_at"] = datetime.now().astimezone()
     print(
         f"[INFO] ✅ Historical dataset built → {len(df)} rows, {len(df.columns)} columns"
     )
+    print(f"[INFO] Cities: {sorted(df['city'].unique().tolist())}")
+    print(f"[INFO] Date span: {df['date'].min().date()} → {df['date'].max().date()}")
+
     return df
 
 
-# ---------------------------------------------------------------
-# 💾 Save locally
-# ---------------------------------------------------------------
 def save_to_parquet(df: pd.DataFrame, path: str = "data/historical_features.parquet"):
-    Path("data").mkdir(exist_ok=True)
+    Path("data").mkdir(exist_ok=True, parents=True)
     df.to_parquet(path, index=False)
     print(f"[OK] Saved dataset → {path}")
 
 
-# ---------------------------------------------------------------
-# 🚀 CLI Entry
-# ---------------------------------------------------------------
 if __name__ == "__main__":
-    engine = get_engine()
-    df = build_historical_dataset(engine, lookback_years=10)
+    eng = get_engine()
+    df = build_historical_dataset(eng, lookback_years=25)
     save_to_parquet(df)

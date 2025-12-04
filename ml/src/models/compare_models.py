@@ -1,146 +1,90 @@
+#!/usr/bin/env python3
 """
-compare_models.py
-----------------------------------------------------------
-Compares forecasting models (LightGBM, Prophet, ARIMA) by city and horizon.
-Computes MAE, MAPE, RMSE, ranks models, and writes summary results to
-public.model_comparison. Also displays a grouped bar chart (MAPE % by city).
+compare_models_v2.py
+Automatically computes validation metrics (MAPE) for each model:
+- prophet_v3
+- arima_v4
+- lightgbm_v3
+- lstm_v1
+
+Populates table: public.model_comparison
+Exports JSON for dashboard: ./.debug/model_comparison.json
 """
 
-from dotenv import load_dotenv, find_dotenv
-from sqlalchemy import create_engine, text
-from datetime import datetime
-import pandas as pd
+import json
 import numpy as np
-import matplotlib.pyplot as plt
-import os
+import pandas as pd
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-# ---------------------------------------------------------------------
-# 1. Environment setup
-# ---------------------------------------------------------------------
-load_dotenv(find_dotenv(usecwd=True))
-NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
-if not NEON_DATABASE_URL:
-    raise RuntimeError("NEON_DATABASE_URL not found in .env")
-
-engine = create_engine(NEON_DATABASE_URL, pool_pre_ping=True, future=True)
-print("[DEBUG] Connected to Neon via .env")
+MODELS = [
+    ("prophet_v3", "prophet"),
+    ("arima_v4", "arima"),
+    ("lightgbm_v3", "lightgbm"),
+    ("lstm_v1", "lstm"),
+]
 
 
-# ---------------------------------------------------------------------
-# 2. Load predictions and actuals
-# ---------------------------------------------------------------------
-def load_data():
-    preds = pd.read_sql_query(
-        "SELECT model_name, city, horizon_months, predict_date, yhat FROM public.model_predictions;",
-        engine,
+def mape(y_true, y_pred):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    return float(np.mean(np.abs((y_true - y_pred) / y_true)) * 100)
+
+
+def fetch_predictions(conn, model_name):
+    q = """
+        SELECT predict_date, y_true, y_pred
+        FROM public.model_predictions
+        WHERE model_name = %s
+        ORDER BY predict_date
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(q, (model_name,))
+        return cur.fetchall()
+
+
+def upsert_model_comparison(conn, model_name, family, mape_value):
+    q = """
+        INSERT INTO public.model_comparison(model_name, family, mape)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (model_name)
+        DO UPDATE SET mape = EXCLUDED.mape;
+    """
+    with conn.cursor() as cur:
+        cur.execute(q, (model_name, family, mape_value))
+
+
+def main():
+    conn = psycopg2.connect(
+        host="localhost", dbname="housing", user="postgres", password="postgres"
     )
-    actuals = pd.read_sql_query(
-        "SELECT city, date AS predict_date, hpi_benchmark AS actual FROM public.features;",
-        engine,
-    )
-    print(f"[INFO] Loaded {len(preds):,} predictions and {len(actuals):,} actuals.")
 
-    df = preds.merge(actuals, on=["city", "predict_date"], how="inner")
-    print(f"[INFO] Merged dataset: {len(df):,} matched rows.")
-    return df
-
-
-# ---------------------------------------------------------------------
-# 3. Compute metrics
-# ---------------------------------------------------------------------
-def compute_metrics(df: pd.DataFrame):
     results = []
-    for (city, horizon, model), g in df.groupby(
-        ["city", "horizon_months", "model_name"]
-    ):
-        y_true, y_pred = g["actual"].values, g["yhat"].values
-        if len(y_true) == 0 or np.all(y_true == 0):
+
+    for version, family in MODELS:
+        rows = fetch_predictions(conn, version)
+        if not rows:
+            print(f"No data for {version}")
             continue
 
-        mae = np.mean(np.abs(y_true - y_pred))
-        mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-        rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+        df = pd.DataFrame(rows)
+        score = mape(df["y_true"], df["y_pred"])
+
+        upsert_model_comparison(conn, version, family, score)
 
         results.append(
-            {
-                "city": city,
-                "horizon_months": horizon,
-                "model_name": model,
-                "mae": mae,
-                "mape": mape,
-                "rmse": rmse,
-            }
+            {"model_name": version, "family": family, "mape": round(score, 4)}
         )
 
-    df_metrics = pd.DataFrame(results)
+    conn.commit()
+    conn.close()
 
-    # Rank and find best model per city & horizon
-    df_metrics["rank"] = df_metrics.groupby(["city", "horizon_months"])["mape"].rank(
-        method="dense"
-    )
-    df_metrics["best_model"] = df_metrics["rank"] == 1
+    Path("./.debug").mkdir(exist_ok=True)
+    with open("./.debug/model_comparison.json", "w") as f:
+        json.dump(results, f, indent=2)
 
-    print(f"[INFO] Computed metrics for {len(df_metrics)} model-city-horizon combos.")
-    return df_metrics
+    print("DONE: model_comparison updated & JSON exported.")
 
 
-# ---------------------------------------------------------------------
-# 4. Write results to public.model_comparison
-# ---------------------------------------------------------------------
-def write_to_db(df: pd.DataFrame):
-    if df.empty:
-        print("[WARN] No metrics to insert.")
-        return
-
-    insert_sql = text("""
-        INSERT INTO public.model_comparison (
-            city, horizon_months, model_name, mae, mape, rmse, rank, best_model, evaluated_at
-        ) VALUES (
-            :city, :horizon_months, :model_name, :mae, :mape, :rmse, :rank, :best_model, NOW()
-        )
-        ON CONFLICT (city, horizon_months, model_name)
-        DO UPDATE SET
-            mae = EXCLUDED.mae,
-            mape = EXCLUDED.mape,
-            rmse = EXCLUDED.rmse,
-            rank = EXCLUDED.rank,
-            best_model = EXCLUDED.best_model,
-            evaluated_at = NOW();
-    """)
-
-    with engine.begin() as conn:
-        conn.exec_driver_sql("SELECT 1;")
-        conn.execute(insert_sql, df.to_dict(orient="records"))
-
-    print(f"[OK] Wrote {len(df):,} rows into public.model_comparison")
-
-
-# ---------------------------------------------------------------------
-# 5. Visualization
-# ---------------------------------------------------------------------
-def plot_comparison(df: pd.DataFrame):
-    df_latest = df[df["horizon_months"] == 12]  # plot 1-year horizon by default
-    pivot_df = df_latest.pivot(index="city", columns="model_name", values="mape")
-
-    pivot_df.plot(kind="bar", figsize=(10, 5))
-    plt.ylabel("MAPE (%)")
-    plt.title("Forecasting Model Comparison by City (MAPE %, lower is better)")
-    plt.xticks(rotation=45, ha="right")
-    plt.legend(title="Model")
-    plt.tight_layout()
-    plt.show()
-
-
-# ---------------------------------------------------------------------
-# Entrypoint
-# ---------------------------------------------------------------------
 if __name__ == "__main__":
-    start = datetime.now()
-    print("[DEBUG] compare_models started ...")
-
-    df = load_data()
-    df_metrics = compute_metrics(df)
-    write_to_db(df_metrics)
-    plot_comparison(df_metrics)
-
-    print(f"[DONE] compare_models completed in {datetime.now() - start}")
+    main()
