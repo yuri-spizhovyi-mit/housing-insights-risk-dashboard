@@ -2,7 +2,6 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from sqlalchemy.orm import Session
 from fapi.db import get_db
 from fapi.models.model_predictions import ModelPrediction
-from datetime import date, timedelta
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
@@ -14,7 +13,7 @@ def get_forecast(
     city: str,
     target: str = Query("price", enum=["price", "rent"]),
     horizon: str = Query("1y", enum=list(HORIZON_MAP.keys())),
-    model: str = Query("arima"),   # ⭐ NEW: allow selecting model directly
+    model: str = Query("arima"),
     propertyType: str | None = None,
     beds: int | None = Query(-1),
     baths: int | None = Query(-1),
@@ -22,14 +21,14 @@ def get_forecast(
 ):
     months = HORIZON_MAP[horizon]
 
-    # Load all rows for this horizon
+    # Load full monthly series (1..months)
     rows = (
         db.query(ModelPrediction)
         .filter(
             ModelPrediction.city == city,
             ModelPrediction.target == target,
-            ModelPrediction.horizon_months == months,
-            ModelPrediction.horizon_months.between(1, months),
+            ModelPrediction.model_name == model,                      # ⭐ important
+            ModelPrediction.horizon_months.between(1, months),        # ⭐ only this
         )
         .order_by(ModelPrediction.predict_date)
         .all()
@@ -41,7 +40,7 @@ def get_forecast(
             detail=f"No data for {city}, {target}, {horizon}, model={model}",
         )
 
-    # Build full list
+    # Convert to API format
     full = [
         {
             "date": r.predict_date.isoformat(),
@@ -52,15 +51,12 @@ def get_forecast(
         for r in rows
     ]
 
-    # ⭐ Sampling logic
+    # Sampling logic
     if months == 12:
-        # 1 year: return monthly (12 points)
         sampled = full
     elif months == 24:
-        # 2 years: every second month → select indexes 0, 2, 4...
-        sampled = full[::2]
+        sampled = full[::2]  # 12 points
     elif months >= 60:
-        # 5 years or 10 years: return 12 evenly spaced points
         step = max(1, len(full) // 12)
         sampled = full[::step][:12]
     else:
