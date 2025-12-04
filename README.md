@@ -9,6 +9,9 @@
 ![MinIO](https://img.shields.io/badge/MinIO-Storage-orange?logo=minio&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker&logoColor=white)
 
+### 🌐 **Live Demo**  
+➡️ https://hird.netlify.app/
+
 Forecasting housing market dynamics remains one of the most challenging and important problems in applied economics and data science.  
 This project provides a transparent, data-driven framework developed as a 3-month MVP to explore whether modern machine-learning and econometric approaches can improve the interpretability and predictive stability of housing indicators across Canadian cities.
 
@@ -19,8 +22,8 @@ This project provides a transparent, data-driven framework developed as a 3-mont
 The **Housing Insights + Risk Dashboard** integrates data engineering, time-series forecasting, and economic modeling into a single analytical platform.
 
 1. **Short-Term Housing Insights** → AI/ML forecasts of home prices and rental indices (1–10 years ahead)  
-   - Models: **Prophet**, **ARIMA**, **LightGBM (planned for micro-forecasts)**  
-   - Outputs: rent index and price forecasts for Vancouver and Toronto  
+   - Models: **Prophet**, **ARIMA**, **LSTM**  
+   - Outputs: rent index and price forecasts for Vancouver, Toronto, Calgary, Edmonton, Ottawa, and others  
 
 2. **Long-Term Housing Risk Dashboard** → macro indicators and risk classification  
    - Metrics: affordability, price-to-rent, debt-to-GDP, interest rates, and other structural measures  
@@ -30,24 +33,18 @@ The **Housing Insights + Risk Dashboard** integrates data engineering, time-seri
 
 ## 🧠 Forecasting Framework
 
-The forecasting module integrates **statistical**, **machine-learning**, and **macro-economic** perspectives.
+The forecasting module integrates **statistical**, **deep learning**, and **macro-economic** modeling.
 
 | Model | Level | Purpose |
 |--------|--------|----------|
-| **Prophet** | Macro | Captures trend and seasonality in rent and price indices |
-| **ARIMA** | Macro | Serves as a statistical baseline for Prophet comparison |
-| **LightGBM** | Micro | Learns feature-based relationships between rent index, listings data, and macro indicators to forecast city- and property-level prices |
+| **Prophet** | Macro | Captures long-term trend/seasonality in price and rent indices |
+| **ARIMA** | Macro | Robust statistical baseline; complements Prophet |
+| **LSTM** | Deep Learning | Learns sequential nonlinear patterns in housing dynamics |
 
-At the current stage, **Prophet** and **ARIMA** produce multi-horizon forecasts (1, 2, 5, 10 years) for each city and target variable.  
+At the current stage, **Prophet**, **ARIMA**, and **LSTM** produce multi-horizon forecasts (1–60 months) for each city and target variable.  
 All predictions are stored in the `public.model_predictions` table and visualized in the React dashboard.
 
-The upcoming **LightGBM** layer will introduce supervised learning trained on a historical dataset built from:
-- `house_price_index` (target variable → future HPI)
-- `rent_index`
-- macro indicators from the Bank of Canada and StatCan
-- aggregated listing features (price, rent-to-price, square footage, bedrooms)
-
-This will enable **hybrid forecasting** that links macroeconomic trends with micro-market signals, generating property-type-specific predictions (e.g., *“Vancouver – 2 bed Condo → $478 K ± 5 % in 12 months”*).
+Future enhancements will introduce hybrid modeling combining LSTM outputs with macro features and rental-listing signals for improved stability.
 
 ---
 
@@ -73,7 +70,7 @@ The project’s PostgreSQL database integrates multiple layers of data — from 
 ### **Phase 1 – MVP (Current)**
 - **Data Layer:** PostgreSQL (+ PostGIS), MinIO for snapshots and model artifacts  
 - **ETL Layer:** Automated pipelines for CREA, CMHC, BoC, and StatCan  
-- **ML Layer:** Prophet and ARIMA forecasts, anomaly detection, sentiment analysis (DistilBERT)  
+- **ML Layer:** Prophet, ARIMA, LSTM forecasting; anomaly detection  
 - **Orchestration:** Docker Compose for Postgres, MinIO, and Python ETL containers  
 - **Frontend:** React + TypeScript dashboard (in progress)  
 
@@ -125,12 +122,3 @@ See the [docs](./docs) folder for:
 📈 For detailed milestones, see the [Project Roadmap](https://github.com/users/yuri-spizhovyi-mit/projects/2/views/4).
 
 ---
-
-### ✅ Summary of Updates
-
-| Topic | Status |
-|-------|--------|
-| Rephrased introduction | ✅ Now objective and research-focused |
-| Added ARIMA to models | ✅ Included in Forecasting Framework |
-| Expanded forecasting description | ✅ Reflects Prophet + ARIMA current and LightGBM planned |
-| Crisis-similarity classifier | ⚙️ Not implemented yet – planned for Phase III |
