@@ -34,7 +34,7 @@ def get_model_comparison(
         ORDER BY horizon_months ASC, model_name ASC
     """)
 
-    rows = db.execute(sql, {"city": city, "target": target}).fetchall()
+    rows = db.execute(sql, {"city": city, "target": target}).mappings().all()
 
     if not rows:
         raise HTTPException(
