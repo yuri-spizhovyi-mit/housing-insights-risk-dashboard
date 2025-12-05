@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
-
 from fapi.db import get_db
+from fapi.models.model_comparison import ModelComparison
 
 router = APIRouter(prefix="/model-comparison", tags=["model-comparison"])
 
@@ -13,45 +12,25 @@ def get_model_comparison(
     target: str = Query(..., enum=["price", "rent"]),
     db: Session = Depends(get_db),
 ):
-    """
-    Returns comparison metrics for ARIMA, Prophet, and LSTM across horizons.
-    """
-
-    sql = text("""
-        SELECT
-            city,
-            target,
-            horizon_months,
-            model_name,
-            mae,
-            mape,
-            rmse,
-            mse,
-            r2
-        FROM public.model_comparison
-        WHERE city = :city
-          AND target = :target
-        ORDER BY horizon_months ASC, model_name ASC
-    """)
-
-    rows = db.execute(sql, {"city": city, "target": target}).mappings().all()
+    rows = (
+        db.query(ModelComparison)
+        .filter(ModelComparison.city == city, ModelComparison.target == target)
+        .order_by(
+            ModelComparison.horizon_months.asc(), ModelComparison.model_name.asc()
+        )
+        .all()
+    )
 
     if not rows:
         raise HTTPException(
-            status_code=404,
-            detail=f"No comparison data for city={city}, target={target}",
+            status_code=404, detail=f"No comparison data for {city}/{target}"
         )
 
-    response = {
-        "city": city,
-        "target": target,
-        "horizons": [],
-        "models": {},
-    }
+    response = {"city": city, "target": target, "horizons": [], "models": {}}
 
     for row in rows:
-        h = row["horizon_months"]
-        m = row["model_name"].replace("_backtest", "")
+        h = int(row.horizon_months)
+        m = row.model_name.replace("_backtest", "")
 
         if h not in response["horizons"]:
             response["horizons"].append(h)
@@ -62,11 +41,11 @@ def get_model_comparison(
         response["models"][m].append(
             {
                 "horizon": h,
-                "mae": row["mae"],
-                "mape": row["mape"],
-                "rmse": row["rmse"],
-                "mse": row["mse"],
-                "r2": row["r2"],
+                "mae": float(row.mae) if row.mae is not None else None,
+                "mape": float(row.mape) if row.mape is not None else None,
+                "rmse": float(row.rmse) if row.rmse is not None else None,
+                "mse": float(row.mse) if row.mse is not None else None,
+                "r2": float(row.r2) if row.r2 is not None else None,
             }
         )
 
