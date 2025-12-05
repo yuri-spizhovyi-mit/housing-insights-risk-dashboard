@@ -42,12 +42,16 @@ def get_model_comparison(
             detail=f"No comparison data for city={city}, target={target}",
         )
 
-    # Organize result for frontend and charts
-    response = {"city": city, "target": target, "horizons": [], "models": {}}
+    response = {
+        "city": city,
+        "target": target,
+        "horizons": [],
+        "models": {},
+    }
 
     for row in rows:
-        h = row.horizon_months
-        m = row.model_name.replace("_backtest", "")  # cleaner names
+        h = row["horizon_months"]
+        m = row["model_name"].replace("_backtest", "")
 
         if h not in response["horizons"]:
             response["horizons"].append(h)
@@ -58,11 +62,11 @@ def get_model_comparison(
         response["models"][m].append(
             {
                 "horizon": h,
-                "mae": row.mae,
-                "mape": row.mape,
-                "rmse": row.rmse,
-                "mse": row.mse,
-                "r2": row.r2,
+                "mae": row["mae"],
+                "mape": row["mape"],
+                "rmse": row["rmse"],
+                "mse": row["mse"],
+                "r2": row["r2"],
             }
         )
 
