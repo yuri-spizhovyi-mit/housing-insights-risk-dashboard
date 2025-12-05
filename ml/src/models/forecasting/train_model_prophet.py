@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, text
 from prophet import Prophet
 
 load_dotenv(find_dotenv(usecwd=True))
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("NEON_DATABASE_URL")
+DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
 REGRESSORS = [
@@ -64,7 +64,7 @@ def forecast_city_target(df, city, target_col, target_name):
     for r in REGRESSORS:
         model.add_regressor(r)
 
-    model.fit(dfp[["ds","y"] + REGRESSORS])
+    model.fit(dfp[["ds", "y"] + REGRESSORS])
 
     # Create future dataframe for 60 months
     future = model.make_future_dataframe(periods=60, freq="MS")
@@ -82,28 +82,30 @@ def forecast_city_target(df, city, target_col, target_name):
 
     for i, row in forecast_df.iterrows():
         horizon = i + 1
-        rows.append({
-            "run_id": str(uuid.uuid4()),
-            "model_name": "prophet",
-            "target": target_name,
-            "horizon_months": horizon,
-            "city": city,
-            "property_type": None,
-            "beds": None,
-            "baths": None,
-            "sqft_min": None,
-            "sqft_max": None,
-            "year_built_min": None,
-            "year_built_max": None,
-            "predict_date": row["ds"],
-            "yhat": float(max(0.0, row["yhat"])),
-            "yhat_lower": float(max(0.0, row["yhat_lower"])),
-            "yhat_upper": float(max(0.0, row["yhat_upper"])),
-            "features_version": "features_to_model_v1",
-            "model_artifact_uri": None,
-            "created_at": datetime.now(timezone.utc),
-            "is_micro": False
-        })
+        rows.append(
+            {
+                "run_id": str(uuid.uuid4()),
+                "model_name": "prophet",
+                "target": target_name,
+                "horizon_months": horizon,
+                "city": city,
+                "property_type": None,
+                "beds": None,
+                "baths": None,
+                "sqft_min": None,
+                "sqft_max": None,
+                "year_built_min": None,
+                "year_built_max": None,
+                "predict_date": row["ds"],
+                "yhat": float(max(0.0, row["yhat"])),
+                "yhat_lower": float(max(0.0, row["yhat_lower"])),
+                "yhat_upper": float(max(0.0, row["yhat_upper"])),
+                "features_version": "features_to_model_v1",
+                "model_artifact_uri": None,
+                "created_at": datetime.now(timezone.utc),
+                "is_micro": False,
+            }
+        )
 
     print(f"[OK] Prophet v2 forecast: {city}/{target_name}")
     return rows

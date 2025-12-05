@@ -18,7 +18,7 @@ from tensorflow.keras.layers import LSTM, Dense
 # ENV
 # -------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("NEON_DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
 SEQ_LEN = 12
@@ -51,7 +51,7 @@ def build_lstm(n_features):
             48,
             activation="tanh",
             return_sequences=False,
-            input_shape=(SEQ_LEN, n_features)
+            input_shape=(SEQ_LEN, n_features),
         )
     )
     model.add(Dense(1))
@@ -76,9 +76,9 @@ def forecast_city(df_city, target_col, target_name, feature_cols):
 
     # build supervised pairs
     for i in range(len(values) - SEQ_LEN):
-        window = values[i:i+SEQ_LEN]
-        last_target = target_vals[i+SEQ_LEN-1]
-        next_target = target_vals[i+SEQ_LEN]
+        window = values[i : i + SEQ_LEN]
+        last_target = target_vals[i + SEQ_LEN - 1]
+        next_target = target_vals[i + SEQ_LEN]
         pct_change = (next_target - last_target) / last_target
 
         X.append(window)
@@ -110,34 +110,36 @@ def forecast_city(df_city, target_col, target_name, feature_cols):
 
         predict_date = last_date + pd.DateOffset(months=horizon)
 
-        rows.append({
-            "run_id": str(uuid.uuid4()),
-            "model_name": "lstm",
-            "target": target_name,
-            "horizon_months": horizon,
-            "city": df_city.city.iloc[0],
-            "property_type": None,
-            "beds": None,
-            "baths": None,
-            "sqft_min": None,
-            "sqft_max": None,
-            "year_built_min": None,
-            "year_built_max": None,
-            "predict_date": predict_date,
-            "yhat": float(yhat),
-            "yhat_lower": float(max(0, yhat_lower)),
-            "yhat_upper": float(max(0, yhat_upper)),
-            "features_version": "model_features_city_simple_v1",
-            "model_artifact_uri": None,
-            "created_at": datetime.now(timezone.utc),
-            "is_micro": False
-        })
+        rows.append(
+            {
+                "run_id": str(uuid.uuid4()),
+                "model_name": "lstm",
+                "target": target_name,
+                "horizon_months": horizon,
+                "city": df_city.city.iloc[0],
+                "property_type": None,
+                "beds": None,
+                "baths": None,
+                "sqft_min": None,
+                "sqft_max": None,
+                "year_built_min": None,
+                "year_built_max": None,
+                "predict_date": predict_date,
+                "yhat": float(yhat),
+                "yhat_lower": float(max(0, yhat_lower)),
+                "yhat_upper": float(max(0, yhat_upper)),
+                "features_version": "model_features_city_simple_v1",
+                "model_artifact_uri": None,
+                "created_at": datetime.now(timezone.utc),
+                "is_micro": False,
+            }
+        )
 
         last_real_price = yhat
 
         # recursive forecast
         new_row = values[-1].copy()
-        new_row[feature_cols.index(target_col)] = yhat   # replace only target
+        new_row[feature_cols.index(target_col)] = yhat  # replace only target
 
         new_val = new_row.reshape(1, 1, len(feature_cols))
         last_window = np.concatenate([last_window[:, 1:, :], new_val], axis=1)
@@ -198,7 +200,12 @@ def main():
                 df_city,
                 target_col="hpi_benchmark",
                 target_name="price",
-                feature_cols=["hpi_benchmark", "mortgage_rate", "unemployment_rate", "cpi_yoy"]
+                feature_cols=[
+                    "hpi_benchmark",
+                    "mortgage_rate",
+                    "unemployment_rate",
+                    "cpi_yoy",
+                ],
             )
         )
 
@@ -208,7 +215,12 @@ def main():
                 df_city,
                 target_col="rent_avg_city",
                 target_name="rent",
-                feature_cols=["rent_avg_city", "mortgage_rate", "unemployment_rate", "cpi_yoy"]
+                feature_cols=[
+                    "rent_avg_city",
+                    "mortgage_rate",
+                    "unemployment_rate",
+                    "cpi_yoy",
+                ],
             )
         )
 

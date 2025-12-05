@@ -1,89 +1,160 @@
 #!/usr/bin/env python3
 """
-compare_models_v2.py
-Automatically computes validation metrics (MAPE) for each model:
-- prophet_v3
-- arima_v4
-- lightgbm_v3
-- lstm_v1
+compare_models.py
 
-Populates table: public.model_comparison
-Exports JSON for dashboard: ./.debug/model_comparison.json
+Evaluates Prophet, ARIMA, and LSTM using BACKTEST predictions.
+Reads rows from model_predictions where:
+
+    model_name IN ('prophet_backtest', 'arima_backtest', 'lstm_backtest')
+    AND y_true IS NOT NULL
+
+Computes:
+    - MAE
+    - MAPE
+    - RMSE
+    - MSE
+    - R²
+
+Writes metrics into public.model_comparison.
 """
 
+import os
 import json
 import numpy as np
 import pandas as pd
-import psycopg2
-from psycopg2.extras import RealDictCursor
+from pathlib import Path
+from dotenv import load_dotenv, find_dotenv
+from sqlalchemy import create_engine, text
 
-MODELS = [
-    ("prophet_v3", "prophet"),
-    ("arima_v4", "arima"),
-    ("lightgbm_v3", "lightgbm"),
-    ("lstm_v1", "lstm"),
-]
+# ---------------------------------------------------------
+# ENVIRONMENT
+# ---------------------------------------------------------
+load_dotenv(find_dotenv(usecwd=True))
+DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+
+BACKTEST_MODELS = ["prophet_backtest", "arima_backtest", "lstm_backtest"]
+
+
+# ---------------------------------------------------------
+# METRICS
+# ---------------------------------------------------------
+def mae(y_true, y_pred):
+    return float(np.mean(np.abs(y_true - y_pred)))
 
 
 def mape(y_true, y_pred):
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
     return float(np.mean(np.abs((y_true - y_pred) / y_true)) * 100)
 
 
-def fetch_predictions(conn, model_name):
-    q = """
-        SELECT predict_date, y_true, y_pred
+def mse(y_true, y_pred):
+    return float(np.mean((y_true - y_pred) ** 2))
+
+
+def rmse(y_true, y_pred):
+    return float(np.sqrt(mse(y_true, y_pred)))
+
+
+def r2_score(y_true, y_pred):
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    return float(1 - ss_res / ss_tot)
+
+
+# ---------------------------------------------------------
+# LOAD PREDICTIONS WITH y_true (BACKTEST ROWS)
+# ---------------------------------------------------------
+def load_backtest_predictions():
+    q = text("""
+        SELECT
+            city,
+            target,
+            model_name,
+            horizon_months,
+            predict_date,
+            yhat AS y_pred,
+            y_true
         FROM public.model_predictions
-        WHERE model_name = %s
-        ORDER BY predict_date
-    """
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(q, (model_name,))
-        return cur.fetchall()
+        WHERE model_name = ANY(:models)
+          AND y_true IS NOT NULL
+        ORDER BY city, target, model_name, predict_date;
+    """)
+
+    with engine.connect() as conn:
+        return pd.read_sql(q, conn, params={"models": BACKTEST_MODELS})
 
 
-def upsert_model_comparison(conn, model_name, family, mape_value):
-    q = """
-        INSERT INTO public.model_comparison(model_name, family, mape)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (model_name)
-        DO UPDATE SET mape = EXCLUDED.mape;
-    """
-    with conn.cursor() as cur:
-        cur.execute(q, (model_name, family, mape_value))
+# ---------------------------------------------------------
+# UPSERT INTO model_comparison
+# ---------------------------------------------------------
+def upsert_comparison_row(row):
+    sql = text("""
+        INSERT INTO public.model_comparison (
+            city, target, horizon_months, model_name,
+            mae, mape, rmse, mse, r2, evaluated_at
+        )
+        VALUES (
+            :city, :target, :horizon_months, :model_name,
+            :mae, :mape, :rmse, :mse, :r2, NOW()
+        )
+        ON CONFLICT (city, target, horizon_months, model_name)
+        DO UPDATE SET
+            mae = EXCLUDED.mae,
+            mape = EXCLUDED.mape,
+            rmse = EXCLUDED.rmse,
+            mse = EXCLUDED.mse,
+            r2 = EXCLUDED.r2,
+            evaluated_at = NOW();
+    """)
+
+    with engine.begin() as conn:
+        conn.execute(sql, row)
 
 
+# ---------------------------------------------------------
+# MAIN EVALUATION ROUTINE
+# ---------------------------------------------------------
 def main():
-    conn = psycopg2.connect(
-        host="localhost", dbname="housing", user="postgres", password="postgres"
-    )
+    print("[DEBUG] Loading backtest predictions...")
+
+    df = load_backtest_predictions()
+
+    if df.empty:
+        print("[WARN] No backtest data found! Did you run the backtest scripts?")
+        return
 
     results = []
 
-    for version, family in MODELS:
-        rows = fetch_predictions(conn, version)
-        if not rows:
-            print(f"No data for {version}")
-            continue
+    # Group by model, city, target, horizon
+    grouped = df.groupby(["model_name", "city", "target", "horizon_months"])
 
-        df = pd.DataFrame(rows)
-        score = mape(df["y_true"], df["y_pred"])
+    for (model, city, target, horizon), g in grouped:
+        y_true = g["y_true"].astype(float).values
+        y_pred = g["y_pred"].astype(float).values
 
-        upsert_model_comparison(conn, version, family, score)
+        res = {
+            "model_name": model,
+            "city": city,
+            "target": target,
+            "horizon_months": int(horizon),
+            "mae": round(mae(y_true, y_pred), 4),
+            "mape": round(mape(y_true, y_pred), 4),
+            "rmse": round(rmse(y_true, y_pred), 4),
+            "mse": round(mse(y_true, y_pred), 4),
+            "r2": round(r2_score(y_true, y_pred), 4),
+        }
 
-        results.append(
-            {"model_name": version, "family": family, "mape": round(score, 4)}
-        )
+        upsert_comparison_row(res)
+        results.append(res)
 
-    conn.commit()
-    conn.close()
+        print(f"[OK] {model} — {city}/{target}, h={horizon}: MAPE={res['mape']}")
 
+    # Export JSON for dashboard
     Path("./.debug").mkdir(exist_ok=True)
     with open("./.debug/model_comparison.json", "w") as f:
         json.dump(results, f, indent=2)
 
-    print("DONE: model_comparison updated & JSON exported.")
+    print("[DONE] Model comparison updated.")
 
 
 if __name__ == "__main__":

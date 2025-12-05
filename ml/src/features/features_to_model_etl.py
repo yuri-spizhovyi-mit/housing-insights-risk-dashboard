@@ -34,7 +34,7 @@ from dotenv import load_dotenv, find_dotenv
 # ENVIRONMENT + DB CONNECTION
 # ---------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-DATABASE_URL =  os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
@@ -76,18 +76,20 @@ def aggregate_city_level(df):
     """
     agg = (
         df.groupby(["city", "date"])
-        .agg({
-            "hpi_benchmark": "median",
-            "rent_avg_city": "median",
-            "mortgage_rate": "median",
-            "unemployment_rate": "median",
-            "overnight_rate": "median",
-            "population": "median",
-            "median_income": "median",
-            "migration_rate": "median",
-            "gdp_growth": "median",
-            "cpi_yoy": "median",
-        })
+        .agg(
+            {
+                "hpi_benchmark": "median",
+                "rent_avg_city": "median",
+                "mortgage_rate": "median",
+                "unemployment_rate": "median",
+                "overnight_rate": "median",
+                "population": "median",
+                "median_income": "median",
+                "migration_rate": "median",
+                "gdp_growth": "median",
+                "cpi_yoy": "median",
+            }
+        )
         .reset_index()
         .sort_values(["city", "date"])
     )
@@ -112,10 +114,16 @@ def add_feature_engineering(df):
     df["lag_6"] = df.groupby("city")["hpi_benchmark"].shift(6)
 
     df["roll_3"] = (
-        df.groupby("city")["hpi_benchmark"].rolling(3).mean().reset_index(level=0, drop=True)
+        df.groupby("city")["hpi_benchmark"]
+        .rolling(3)
+        .mean()
+        .reset_index(level=0, drop=True)
     )
     df["roll_6"] = (
-        df.groupby("city")["hpi_benchmark"].rolling(6).mean().reset_index(level=0, drop=True)
+        df.groupby("city")["hpi_benchmark"]
+        .rolling(6)
+        .mean()
+        .reset_index(level=0, drop=True)
     )
 
     return df
@@ -126,8 +134,8 @@ def add_feature_engineering(df):
 # ---------------------------------------------------------
 def zscore_group(df, cols):
     for col in cols:
-        df[f"{col}_z"] = (
-            df.groupby("city")[col].transform(lambda x: (x - x.mean()) / (x.std() + 1e-6))
+        df[f"{col}_z"] = df.groupby("city")[col].transform(
+            lambda x: (x - x.mean()) / (x.std() + 1e-6)
         )
     return df
 
@@ -146,8 +154,11 @@ def zscore_cols(df):
         "cpi_yoy",
         "hpi_benchmark_yoy",
         "rent_avg_city_yoy",
-        "lag_1", "lag_3", "lag_6",
-        "roll_3", "roll_6",
+        "lag_1",
+        "lag_3",
+        "lag_6",
+        "roll_3",
+        "roll_6",
     ]
     df = zscore_group(df, [c for c in zcols if c in df.columns])
     return df

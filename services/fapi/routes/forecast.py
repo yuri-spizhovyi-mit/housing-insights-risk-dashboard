@@ -27,8 +27,8 @@ def get_forecast(
         .filter(
             ModelPrediction.city == city,
             ModelPrediction.target == target,
-            ModelPrediction.model_name == model,                      # ⭐ important
-            ModelPrediction.horizon_months.between(1, months),        # ⭐ only this
+            ModelPrediction.model_name == model,  # ⭐ important
+            ModelPrediction.horizon_months.between(1, months),  # ⭐ only this
         )
         .order_by(ModelPrediction.predict_date)
         .all()

@@ -293,6 +293,7 @@ CREATE TABLE IF NOT EXISTS public.model_predictions (
   yhat                NUMERIC(14,4) NOT NULL,
   yhat_lower          NUMERIC(14,4),
   yhat_upper          NUMERIC(14,4),
+  y_true              DOUBLE PRECISION,
   features_version    TEXT,
   model_artifact_uri  TEXT,
   created_at          TIMESTAMPTZ DEFAULT now(),
@@ -408,6 +409,8 @@ CREATE TABLE IF NOT EXISTS public.model_comparison (
     mae DOUBLE PRECISION,
     mape DOUBLE PRECISION,
     rmse DOUBLE PRECISION,
+    mse DOUBLE PRECISION,
+    r2 DOUBLE PRECISION;
     rank INTEGER,
     best_model BOOLEAN DEFAULT FALSE,
     evaluated_at TIMESTAMP DEFAULT NOW(),
