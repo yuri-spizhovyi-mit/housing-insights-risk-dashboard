@@ -1,9 +1,10 @@
 # services/fapi/models/model_comparison.py
-from sqlalchemy import Column, String, Integer, Numeric, TIMESTAMP
+from sqlalchemy import Column, String, Integer, Float, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from fapi.db import Base
 import uuid
+
 
 class ModelComparison(Base):
     __tablename__ = "model_comparison"
@@ -13,10 +14,10 @@ class ModelComparison(Base):
     horizon_months = Column(Integer, primary_key=True)
     model_name = Column(String, primary_key=True)
 
-    mae = Column(Numeric(14, 4))
-    mape = Column(Numeric(14, 4))
-    rmse = Column(Numeric(14, 4))
-    mse = Column(Numeric(14, 4))
-    r2 = Column(Numeric(14, 4))
+    mae = Column(Float)
+    mape = Column(Float)
+    rmse = Column(Float)
+    mse = Column(Float)
+    r2 = Column(Float)
 
     evaluated_at = Column(TIMESTAMP, server_default=func.now())
