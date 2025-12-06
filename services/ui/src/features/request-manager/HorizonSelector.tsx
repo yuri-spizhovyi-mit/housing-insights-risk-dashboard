@@ -2,7 +2,7 @@ import SelectorShell from "./SelectorShell";
 import { useFilters } from "../../context/FilterContext";
 
 function HorizonSelector() {
-  const horizons = ["1Y", "2Y", "5Y", "10Y"];
+  const horizons = ["1Y", "2Y", "5Y"];
   const { dispatch, horizon } = useFilters();
 
   return (

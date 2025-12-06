@@ -1,3 +1,4 @@
+import { useState } from "react";
 import HomePriceForecast from "./features/forecast/home-price-forecast/HomePriceForecast";
 import RentForecast from "./features/forecast/rent-forecast/RentForecast";
 import MarketAnomalies from "./features/market-anomalies/MarketAnomalies";
@@ -11,16 +12,17 @@ import Main from "./ui/Main";
 import Subheader from "./ui/Subheader";
 
 function App() {
+  const [forecastTrigger, setForecastTrigger] = useState(Date.now());
   return (
     <>
       <Subheader />
       <Header />
       <Main>
-        <FilterManager />
+        <FilterManager setForecastTrigger={setForecastTrigger} />
         <Dashboard>
-          <HomePriceForecast />
+          <HomePriceForecast forecastTrigger={forecastTrigger} />
           <RiskGauge />
-          <RentForecast />
+          <RentForecast forecastTrigger={forecastTrigger} />
           <SentimentAndNews />
           <MarketAnomalies />
           <UiOverview />

@@ -1,5 +1,5 @@
 import type { CitySentiments } from "../types/sentiments";
-import type { FilterContextType } from "../context/FilterContext";
+import type { State } from "../context/FilterContext";
 import { ApiError } from "./errors";
 
 import type { MarketAnomaliesSeries } from "../types/market-anomalies";
@@ -18,28 +18,21 @@ export async function getCities(): Promise<string[]> {
   return data.cities;
 }
 
-export async function getForecast(filters: FilterContextType) {
+export type ForecastTarget = "price" | "rent";
+
+export async function getForecast(filters: State, target: ForecastTarget) {
   const params = new URLSearchParams();
   params.append("city", filters.city);
   params.append("horizon", filters.horizon.toLowerCase());
-  params.append("target", filters.target);
-  params.append("sqftMin", String(filters.sqftMin));
-  params.append("sqftMax", String(filters.sqftMax));
+  params.append("target", target);
+  params.append("model", filters.modelType.toLowerCase());
 
-  if (filters.propertyType && filters.propertyType !== "Any") {
-    params.append("propertyType", filters.propertyType);
-  }
-  if (filters.beds && filters.beds !== "Any") {
-    params.append("beds", filters.beds);
-  }
-  if (filters.baths && filters.baths !== "Any") {
-    params.append("baths", filters.baths);
-  }
+  console.log(params.toString());
 
   let res: Response;
   try {
     res = await fetch(
-      `https://housing-insights-risk-dashboard.vercel.app/forecast?${params.toString()}`
+      `https://housing-insights-risk-dashboard.vercel.app/forecast?${params.toString()}&`
     );
   } catch {
     throw new ApiError(
@@ -53,7 +46,7 @@ export async function getForecast(filters: FilterContextType) {
     throw new ApiError(
       "empty",
       "No forecast data available",
-      `We don’t have results for ${filters.city}, ${filters.propertyType}, max:${filters.sqftMin} - min:${filters.sqftMax} sqft, horizon:${filters.horizon}Y. Try adjusting filters.`
+      `We don’t have results for ${filters.city},  horizon:${filters.horizon}Y, and model type:${filters.modelType}. Try adjusting filters.`
     );
   }
 
@@ -100,6 +93,7 @@ export async function getRiskGauge(city: string): Promise<CityInsight> {
   }
 
   const data = await res.json();
+  console.log(data);
   return data;
 }
 
