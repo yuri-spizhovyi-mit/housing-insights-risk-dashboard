@@ -32,6 +32,7 @@ def map_inventory(v: float) -> str:
 
 @router.get("")
 def get_risk(city: str, db: Session = Depends(get_db)):
+    city = city.strip().title()
     rows = (
         db.query(RiskPrediction)
         .filter(RiskPrediction.city == city)

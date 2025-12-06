@@ -30,7 +30,7 @@ from sqlalchemy import create_engine, text
 # ENVIRONMENT
 # ---------------------------------------------------------
 load_dotenv(find_dotenv(usecwd=True))
-DATABASE_URL = os.getenv("NEON_DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 
 BACKTEST_MODELS = ["prophet_backtest", "arima_backtest", "lstm_backtest"]
