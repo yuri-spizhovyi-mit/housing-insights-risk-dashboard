@@ -1,14 +1,12 @@
 import { createContext, useContext, type Dispatch } from "react";
 
+export type ModelType = "ARIMA" | "LSTM" | "prophet";
+export type RequestModelType = "arima" | "lstm" | "prophet";
+
 export type State = {
   city: string;
   horizon: string;
-  propertyType: string;
-  beds: string;
-  baths: string;
-  sqftMin: number;
-  sqftMax: number;
-  yearBuilt?: string;
+  modelType: RequestModelType;
 };
 
 export type FilterContextType = State & {
@@ -18,22 +16,13 @@ export type FilterContextType = State & {
 export type Action =
   | { type: "SET_CITY"; payload: string }
   | { type: "SET_HORIZON"; payload: string }
-  | { type: "SET_PROPERTY_TYPE"; payload: string }
-  | { type: "SET_BEDS"; payload: string }
-  | { type: "SET_BATHS"; payload: string }
-  | { type: "SET_SQFT"; payload: { min: number; max: number } }
-  | { type: "SET_YEAR_BUILT"; payload: string }
+  | { type: "SET_MODEL_TYPE"; payload: RequestModelType }
   | { type: "RESET" };
 
 export const initialState: State = {
-  city: "Kelowna",
+  city: "Calgary",
   horizon: "1Y",
-  propertyType: "House",
-  beds: "Any",
-  baths: "Any",
-  sqftMin: 1200,
-  sqftMax: 3000,
-  yearBuilt: "any",
+  modelType: "arima",
 };
 
 export function reducer(state: State, action: Action): State {
@@ -42,20 +31,8 @@ export function reducer(state: State, action: Action): State {
       return { ...state, city: action.payload };
     case "SET_HORIZON":
       return { ...state, horizon: action.payload };
-    case "SET_PROPERTY_TYPE":
-      return { ...state, propertyType: action.payload };
-    case "SET_BEDS":
-      return { ...state, beds: action.payload };
-    case "SET_BATHS":
-      return { ...state, baths: action.payload };
-    case "SET_SQFT":
-      return {
-        ...state,
-        sqftMin: action.payload.min,
-        sqftMax: action.payload.max,
-      };
-    case "SET_YEAR_BUILT":
-      return { ...state, yearBuilt: action.payload };
+    case "SET_MODEL_TYPE":
+      return { ...state, modelType: action.payload };
     case "RESET":
       return initialState;
     default:

@@ -11,7 +11,7 @@ function SentimentAndNews() {
   const { city } = useFilters();
   const { sentiments, error, isFetching } = useSentiments(city);
   const memoizedData = useMemo(() => sentiments, [sentiments]);
-
+  console.log(sentiments);
   return (
     <Frame className="col-span-12 lg:col-span-4 text-amber-50">
       {isFetching ? (

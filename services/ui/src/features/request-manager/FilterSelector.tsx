@@ -3,10 +3,12 @@
 // import { forwardRef, type ReactNode } from "react";
 // import { useLenis } from "../../context/useLenis";
 
+import type { RequestModelType } from "../../context/FilterContext";
+
 interface FilterSelectorProps {
   data: string[];
   value: string;
-  handleValueUpdate: (value: string) => void;
+  handleValueUpdate: (value: string | RequestModelType) => void;
 }
 
 function FilterSelector({

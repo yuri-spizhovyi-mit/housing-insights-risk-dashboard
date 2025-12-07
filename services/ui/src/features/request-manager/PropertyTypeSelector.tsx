@@ -1,19 +1,21 @@
 import SelectorShell from "./SelectorShell";
-import { useFilters } from "../../context/FilterContext";
+import { useFilters, type RequestModelType } from "../../context/FilterContext";
 import FilterSelector from "./FilterSelector";
 
 function PropertyTypeSelector() {
-  const propertyTypes = ["Condo", "House", "Town House", "Apartment"];
-
-  const { dispatch, propertyType } = useFilters();
+  const modelTypes = ["ARIMA", "LSTM", "prophet"];
+  const { dispatch, modelType } = useFilters();
 
   return (
-    <SelectorShell type="Property Type" className="px-4">
+    <SelectorShell type="Model Type" className="px-4">
       <FilterSelector
-        value={propertyType}
-        data={propertyTypes}
-        handleValueUpdate={(property: string) =>
-          dispatch({ type: "SET_PROPERTY_TYPE", payload: property })
+        value={modelType}
+        data={modelTypes}
+        handleValueUpdate={(value: string) =>
+          dispatch({
+            type: "SET_MODEL_TYPE",
+            payload: value.toLowerCase() as RequestModelType,
+          })
         }
       />
     </SelectorShell>

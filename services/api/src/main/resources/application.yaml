@@ -1,24 +1,32 @@
 spring:
+  config:
+    import: "optional:file:.env"
+
   datasource:
-    url: ${DATABASE_URL}
-    username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
-    driver-class-name: org.postgresql.Driver
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+
   jpa:
     hibernate:
-      ddl-auto: ${DDL_AUTO:create-drop}
-    show-sql: ${SHOW_SQL:false}
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
-server:
-  port: ${PORT:8080}
-  address: 0.0.0.0 # It tells your app to accept connections from any IP address, not just itself
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${SUPPORT_EMAIL}
+    password: ${APP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
-management: # Spring Boot Actuator configuration (monitoring/health checks)
-  endpoints: # Defines which monitoring endpoints are available
-    web: # Web-based endpoints (HTTP URLs)
-      exposure: # Which endpoints to expose publicly
-        include: health,info # Only expose /actuator/health and /actuator/info
-  endpoint:
-    health:
-      show-details: when-authorized # Only show detailed health info to authorized users
+security:
+  jwt:
+    secret-key: ${JWT_SECRET_KEY}
+    expiration-time: 3600000

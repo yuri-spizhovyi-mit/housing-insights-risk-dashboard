@@ -1,9 +1,6 @@
-import BathsSelector from "./BathsSelector";
-import BedsSelector from "./BedsSelector";
 import CitySelector from "./CitySelector";
 import HorizonSelector from "./HorizonSelector";
-import PropertyTypeSelector from "./PropertyTypeSelector";
-import SqrtRangeSelector from "./SqrtRangeSelector";
+import PropertyTypeSelector from "./PropertyTypeSelector.tsx";
 import FilterContainer from "./FilterContainer.tsx";
 import PredictTrigger from "./PredictTrigger.tsx";
 
@@ -12,11 +9,8 @@ function FilterManager() {
     <section className="px-6 pt-6">
       <FilterContainer>
         <CitySelector />
-        <PropertyTypeSelector />
-        <BedsSelector />
-        <BathsSelector />
-        <SqrtRangeSelector />
         <HorizonSelector />
+        <PropertyTypeSelector />
         <PredictTrigger />
       </FilterContainer>
     </section>
