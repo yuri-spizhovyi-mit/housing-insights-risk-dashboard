@@ -62,38 +62,75 @@ export async function getForecast(filters: State, target: ForecastTarget) {
 }
 
 export async function getSentiments(city: string): Promise<CitySentiments> {
-  const res = await fetch(
-    `https://housing-insights-risk-dashboard.vercel.app/sentiment?city=${city}`
-  );
+  try {
+    const res = await fetch(
+      `https://housing-insights-risk-dashboard.vercel.app/sentiment?city=${city}`
+    );
 
-  if (!res.ok) {
+    if (!res.ok) {
+      throw new ApiError(
+        "error",
+        "Something went wrong",
+        "Server is unavailable, please try again later."
+      );
+    }
+
+    const data = await res.json();
+
+    if (!data || typeof data !== "object") {
+      throw new ApiError(
+        "error",
+        "Invalid response from server",
+        "Sentiment data is missing or improperly formatted."
+      );
+    }
+
+    return data;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+
     throw new ApiError(
       "error",
-      "Something went wrong",
-      "Server is unavailable, please try again later."
+      "Failed to fetch",
+      "Network request failed or the server is unreachable."
     );
   }
-
-  const data = await res.json();
-  return data;
 }
 
 export async function getRiskGauge(city: string): Promise<CityInsight> {
-  const res = await fetch(
-    `https://housing-insights-risk-dashboard.vercel.app/risk?city=${city}`
-  );
+  try {
+    const res = await fetch(
+      `https://housing-insights-risk-dashboard.vercel.app/risk?city=${city}`
+    );
 
-  if (!res.ok) {
+    if (!res.ok) {
+      throw new ApiError(
+        "error",
+        "Something went wrong",
+        "Server is unavailable, please try again later."
+      );
+    }
+
+    const data = await res.json();
+
+    if (!data || typeof data !== "object") {
+      throw new ApiError(
+        "error",
+        "Invalid response from server",
+        "Risk gauge data is missing or incomplete."
+      );
+    }
+
+    return data;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+
     throw new ApiError(
       "error",
-      "Something went wrong",
-      "Server is unavailable, please try again later."
+      "Failed to fetch",
+      "Network request failed or the server is unreachable."
     );
   }
-
-  const data = await res.json();
-  console.log(data);
-  return data;
 }
 
 export async function getMarketAnomalies(
