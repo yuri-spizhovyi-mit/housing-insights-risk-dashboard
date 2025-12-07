@@ -4,6 +4,7 @@ import { ApiError } from "./errors";
 
 import type { MarketAnomaliesSeries } from "../types/market-anomalies";
 import type { CityInsight } from "../types/risk";
+import type { ForecastMetricsResponse } from "../types/model-comparison";
 
 export async function getCities(): Promise<string[]> {
   const res = await fetch(
@@ -26,8 +27,6 @@ export async function getForecast(filters: State, target: ForecastTarget) {
   params.append("horizon", filters.horizon.toLowerCase());
   params.append("target", target);
   params.append("model", filters.modelType.toLowerCase());
-
-  console.log(params.toString());
 
   let res: Response;
   try {
@@ -143,6 +142,55 @@ export async function getMarketAnomalies(
       `Unable to fetch anomaly data for ${city}. Please check your internet connection or try again later.\n${String(
         error
       )}`
+    );
+  }
+}
+
+export async function getModelComparisons(
+  city: string,
+  target: ForecastTarget
+): Promise<ForecastMetricsResponse> {
+  try {
+    const res = await fetch(
+      `https://housing-insights-risk-dashboard.vercel.app/model-comparison?city=${city}&target=${target}`
+    );
+
+    if (res.status === 404) {
+      throw new ApiError(
+        "empty",
+        "No model comparison data available",
+        `We don’t have results for ${city} and target: ${target}. Try adjusting filters.`
+      );
+    }
+
+    if (!res.ok) {
+      throw new ApiError(
+        "error",
+        "Something went wrong",
+        "Server is unavailable, please try again later."
+      );
+    }
+
+    const data = await res.json();
+
+    if (!data || !data.models) {
+      throw new ApiError(
+        "error",
+        "Invalid response from server",
+        "The model data format is incorrect or incomplete."
+      );
+    }
+
+    return data;
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw err;
+    }
+
+    throw new ApiError(
+      "error",
+      "Failed to fetch",
+      "Network request failed or the server is unreachable."
     );
   }
 }
