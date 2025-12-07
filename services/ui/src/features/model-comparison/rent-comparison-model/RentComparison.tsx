@@ -13,7 +13,7 @@ function RentComparison() {
   const memoizedData = useMemo(() => modelsData, [modelsData?.city]);
 
   return (
-    <Frame className="col-span-12 sm:col-span-8 opacity-100 flex flex-col">
+    <Frame className="col-span-12 lg:col-span-8 opacity-100 flex flex-col">
       {isFetching ? (
         <Skeleton
           variant="rounded"
