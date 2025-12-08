@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from ..routes import (
+from fapi.routes import (
     forecast,
     risk,
     sentiment,
