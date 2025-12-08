@@ -27,7 +27,7 @@ function RentForecast() {
         <Frame.Header
           leftIcon={<LineChartIcon className="size-6" />}
           title="Rent Price Forecast"
-          details="baseline (stub)"
+          details="baseline"
         />
       )}
 

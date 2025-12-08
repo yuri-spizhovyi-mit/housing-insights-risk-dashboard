@@ -27,7 +27,7 @@ function MarketAnomalies() {
         <Frame.Header
           leftIcon={<Activity className="size-5 opacity-80" />}
           title="Market Anomalies"
-          details="Isonlation Forest (stub)"
+          details="Isonlation Forest"
         />
       )}
 
