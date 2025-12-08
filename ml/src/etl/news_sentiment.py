@@ -15,13 +15,29 @@ SNAPSHOT_DIR = "./.debug/news"
 os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
 FEEDS = {
-    "Kelowna": [
-        "https://globalnews.ca/tag/kelowna-real-estate/feed/",
-        "https://okanaganedge.net/feed/",
+    "Victoria": [
+        "https://globalnews.ca/tag/victoria-real-estate/feed/",
+        "https://www.timescolonist.com/rss",  # includes real estate / local housing
     ],
     "Vancouver": [
         "https://globalnews.ca/tag/vancouver-real-estate/feed/",
         "https://vancouversun.com/category/real-estate/feed",
+    ],
+    "Calgary": [
+        "https://globalnews.ca/tag/calgary-real-estate/feed/",
+        "https://calgaryherald.com/category/real-estate/feed",
+    ],
+    "Edmonton": [
+        "https://globalnews.ca/tag/edmonton-real-estate/feed/",
+        "https://edmontonjournal.com/category/real-estate/feed",
+    ],
+    "Winnipeg": [
+        "https://globalnews.ca/tag/winnipeg-real-estate/feed/",
+        "https://winnipegsun.com/category/real-estate/feed",
+    ],
+    "Ottawa": [
+        "https://globalnews.ca/tag/ottawa-real-estate/feed/",
+        "https://ottawacitizen.com/category/real-estate/feed",
     ],
     "Toronto": [
         "https://globalnews.ca/tag/toronto-real-estate/feed/",

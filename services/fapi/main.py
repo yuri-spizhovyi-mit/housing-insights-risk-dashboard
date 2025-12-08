@@ -17,7 +17,6 @@ origins = [
     "http://localhost:5173",  # local frontend dev
     "https://hird.netlify.app",  # deployed frontend
     "https://housing-insights-risk-dashboard.vercel.app",
-
 ]
 
 app.add_middleware(
