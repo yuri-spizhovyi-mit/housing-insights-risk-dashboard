@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from fapi.db import get_db
-from fapi.models.news import NewsArticle  # ✅ import here
+from services.fapi.db import get_db
+from services.fapi.models.news import NewsArticle  # ✅ import here
 
 router = APIRouter(prefix="/sentiment", tags=["sentiment"])
 

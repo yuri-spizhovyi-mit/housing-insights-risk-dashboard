@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Date, Numeric, TIMESTAMP, text
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from fapi.db import Base
+from services.fapi.db import Base
 
 
 class RiskPrediction(Base):

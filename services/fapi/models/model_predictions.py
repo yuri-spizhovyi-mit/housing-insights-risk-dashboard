@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Integer, Date, Numeric, Text, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
-from fapi.db import Base
+from services.fapi.db import Base
 import uuid
 
 
