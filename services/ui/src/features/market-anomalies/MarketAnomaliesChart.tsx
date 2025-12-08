@@ -13,29 +13,45 @@ interface MarketAnomaliesChartProps {
   data: MarketAnomaliesSeries[] | undefined;
 }
 
+function shouldRenderDot(index: number, isAnomaly: boolean) {
+  if (isAnomaly) return true;
+  const showEvery = 3;
+  return index % showEvery === 0;
+}
+
+const AnomalyDot = (props: any) => {
+  const { cx, cy, payload, index, dataKey, stroke } = props;
+
+  const isAnomaly = dataKey === "price" && payload.isHomeAnomaly;
+
+  if (!shouldRenderDot(index, isAnomaly)) return null;
+
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={isAnomaly ? 6 : 4}
+      fill={isAnomaly ? "#ef4444" : stroke}
+      stroke="#111"
+      strokeWidth={1}
+    />
+  );
+};
+
 function transformData(data: MarketAnomaliesSeries[] | undefined) {
-  // Time: O((m * s) + d log d), Space: O(map + sorted)
   if (!data) return [];
 
   const map = new Map<string, any>();
 
   for (const series of data) {
-    const key = series.target;
+    if (series.target !== "price") continue;
 
     for (const point of series.signals) {
-      if (!map.has(point.date)) {
-        map.set(point.date, {
-          date: point.date,
-          [key]: point.score,
-          isRentAnomaly: series.target === "rent" && point.is_anomaly,
-          isHomeAnomaly: series.target === "price" && point.is_anomaly,
-        });
-      } else {
-        const entry = map.get(point.date)!;
-        entry[key] = point.score;
-        entry.isRentAnomaly ||= series.target === "rent" && point.is_anomaly;
-        entry.isHomeAnomaly ||= series.target === "price" && point.is_anomaly;
-      }
+      map.set(point.date, {
+        date: point.date,
+        price: point.score,
+        isHomeAnomaly: point.is_anomaly,
+      });
     }
   }
 
@@ -46,32 +62,27 @@ function transformData(data: MarketAnomaliesSeries[] | undefined) {
 
 function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
   const transformedData = transformData(data);
+  const customTicks = transformedData
+    .filter((_, index) => index % 24 === 0)
+    .map((d) => d.date);
 
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={transformedData}>
         <Line
           type="monotone"
-          dataKey="rent"
-          stroke="#fbbf24"
-          strokeWidth={2}
-          connectNulls={true}
-          dot={{ r: 4 }}
-          activeDot={{ r: 6 }}
-        />
-
-        <Line
-          type="monotone"
           dataKey="price"
           stroke="#10b981"
           strokeWidth={2}
           connectNulls={true}
-          dot={{ r: 4 }}
+          dot={(props) => <AnomalyDot {...props} dataKey="price" />}
           activeDot={{ r: 6 }}
         />
 
         <XAxis
           dataKey="date"
+          ticks={customTicks}
+          interval={0}
           tickFormatter={(date) =>
             new Date(date).toLocaleDateString("en-US", {
               month: "short",
@@ -87,8 +98,9 @@ function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
           axisLine={{ stroke: "#333" }}
           tickLine
         />
+
         <YAxis
-          tickFormatter={(val) => val.toFixed(1)}
+          tickFormatter={(val) => val.toLocaleString("en-US")}
           tick={{
             fontSize: 12,
             fill: "var(--text-primary)",
@@ -98,6 +110,7 @@ function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
           axisLine={{ stroke: "#333" }}
           tickLine
         />
+
         <Tooltip
           contentStyle={{
             background: "#111",
@@ -106,14 +119,8 @@ function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
           }}
           labelStyle={{ color: "#ffffff" }}
           formatter={(value: number, name: string, props: any) => [
-            value.toFixed(2),
-            name === "rent"
-              ? props.payload.isRentAnomaly
-                ? "Rent • Anomaly"
-                : "Rent"
-              : props.payload.isHomeAnomaly
-              ? "Home • Anomaly"
-              : "Home",
+            value.toLocaleString("en-US"),
+            props.payload.isHomeAnomaly ? "Home • Anomaly" : "Home",
           ]}
           labelFormatter={(date) =>
             new Date(date).toLocaleDateString("en-US", {

@@ -26,7 +26,7 @@ function HomePriceForecast() {
         <Frame.Header
           leftIcon={<Home className="size-5 opacity-80" />}
           title="Home Price Forecast"
-          details="prophet-like · 80/95% bands (stub)"
+          details="prophet-like · 80/95% bands"
         />
       )}
 
