@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from services.fapi.db import get_db  # ✅
-from services.fapi.models.model_predictions import ModelPrediction  # ✅
+from ..db import get_db  # ✅
+from ..models.model_predictions import ModelPrediction  # ✅
 
 
 router = APIRouter(prefix="/cities", tags=["cities"])

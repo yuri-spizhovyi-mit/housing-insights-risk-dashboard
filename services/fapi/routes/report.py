@@ -19,10 +19,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from services.fapi.db import get_db
-from services.fapi.models.model_predictions import ModelPrediction
-from services.fapi.models.risk_predictions import RiskPrediction
-from services.fapi.models.anomaly_signals import AnomalySignal
+from ..db import get_db
+from ..models.model_predictions import ModelPrediction
+from ..models.risk_predictions import RiskPrediction
+from ..models.anomaly_signals import AnomalySignal
 
 router = APIRouter(prefix="/report", tags=["report"])
 

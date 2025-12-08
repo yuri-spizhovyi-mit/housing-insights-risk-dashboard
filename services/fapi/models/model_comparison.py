@@ -2,7 +2,7 @@
 from sqlalchemy import Column, String, Integer, Float, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
-from services.fapi.db import Base
+from ..db import Base
 import uuid
 
 

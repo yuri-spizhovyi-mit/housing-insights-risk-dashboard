@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from services.fapi.db import get_db
-from services.fapi.models.anomaly_signals import AnomalySignal
+from ..db import get_db
+from ..models.anomaly_signals import AnomalySignal
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 

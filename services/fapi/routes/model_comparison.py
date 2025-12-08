@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
 from sqlalchemy.orm import Session
-from services.fapi.db import get_db
-from services.fapi.models.model_comparison import ModelComparison
+from ..db import get_db
+from ..models.model_comparison import ModelComparison
 
 router = APIRouter(prefix="/model-comparison", tags=["model-comparison"])
 

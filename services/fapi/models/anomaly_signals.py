@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Date, Numeric, TIMESTAMP, Boolean, text
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
-from services.fapi.db import Base
+from ..db import Base
 
 
 class AnomalySignal(Base):
