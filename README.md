@@ -106,7 +106,8 @@ See the [docs](./docs) folder for:
 - [Architecture](./docs/architecture.md)  
 - [Data Sources](./docs/data_sources.md)  
 - [Modeling](./docs/modeling.md)  
-- [Reports](./docs/reports.md)  
+- [Data flow](./docs/data_flow.md)
+- [Essay](./docs/essay/Housing_Insights_Risk_Dashboard_Essay.pdf)  
 - [Presentations](./docs/presentations)  
 
 ---
