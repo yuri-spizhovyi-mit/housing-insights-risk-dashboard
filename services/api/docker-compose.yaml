@@ -1,0 +1,36 @@
+services:
+  hird-api:
+    build: .
+    container_name: hird-api
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # IMPORTANT REMINDER TO MYSELF: inside Docker, "localhost" would mean the hird-api container itself.
+      # Use the redis service name as the hostname.
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - hird-api-network
+
+  redis:
+    image: redis:7.4.2
+    container_name: hird-redis
+    ports:
+      # optional: expose to your host machine (useful for debugging with redis-cli locally)
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - hird-api-network
+
+networks:
+  hird-api-network:
+    driver: bridge
