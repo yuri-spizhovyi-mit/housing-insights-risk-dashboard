@@ -42,22 +42,21 @@ def get_risk(city: str, db: Session = Depends(get_db)):
     if not rows:
         raise HTTPException(status_code=404, detail=f"No risk data for {city}")
 
-    latest = rows[0].predict_date
-    indices = {r.risk_type: float(r.risk_value) for r in rows if r.predict_date == latest}
+    indices = {r.risk_type: float(r.risk_value) for r in rows}
 
     return {
         "city": city,
         "date": rows[0].predict_date.isoformat(),
-        "score": round(indices["composite_index"] * 100) if "composite_index" in indices else None,
+        "score": round(indices.get("composite_index", 0) * 100),
         "breakdown": [
             {
                 "name": "Affordability",
-                "status": map_affordability(indices["affordability"]) if "affordability" in indices else "Unavailable",
+                "status": map_affordability(indices.get("affordability", 0)),
             },
             {
                 "name": "Price-to-Rent",
-                "status": map_price_to_rent(indices["price_to_rent"]) if "price_to_rent" in indices else "Unavailable",
+                "status": map_price_to_rent(indices.get("price_to_rent", 0)),
             },
-            {"name": "Inventory", "status": map_inventory(indices["inventory"]) if "inventory" in indices else "Unavailable"},
+            {"name": "Inventory", "status": map_inventory(indices.get("inventory", 0))},
         ],
     }
