@@ -118,7 +118,7 @@ function MarketAnomaliesChart({ data }: MarketAnomaliesChartProps) {
             fontSize: "14px",
           }}
           labelStyle={{ color: "#ffffff" }}
-          formatter={(value: number, name: string, props: any) => [
+          formatter={(value: number, _name: string, props: any) => [
             value.toLocaleString("en-US"),
             props.payload.isHomeAnomaly ? "Home • Anomaly" : "Home",
           ]}

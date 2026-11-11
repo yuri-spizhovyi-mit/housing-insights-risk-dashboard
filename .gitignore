@@ -31,3 +31,6 @@ _debug/
 .cache/
 infra/db/backups/
 ml/src/etl/*.csv 
+
+.venv/
+*.db
