@@ -40,16 +40,3 @@ app.include_router(model_comparison.router)
 @app.get("/")
 def root():
     return {"status": "ok", "service": "fastapi"}
-
-import logging
-import time
-@app.middleware("http")
-async def request_metrics(request, call_next):
-    start = time.monotonic()
-    try:
-        response = await call_next(request)
-        logging.getLogger("housing.api").info("request path=%s status=%s duration_ms=%.1f", request.url.path, response.status_code, (time.monotonic()-start)*1000)
-        return response
-    except Exception:
-        logging.getLogger("housing.api").exception("request_failure path=%s", request.url.path)
-        raise

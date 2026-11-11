@@ -9,7 +9,7 @@ router = APIRouter(prefix="/model-comparison", tags=["model-comparison"])
 @router.get("")
 def get_model_comparison(
     city: str,
-    target: str = Query(..., pattern="^(price|rent)$"),
+    target: str = Query(..., enum=["price", "rent"]),
     db: Session = Depends(get_db),
 ):
     rows = (
