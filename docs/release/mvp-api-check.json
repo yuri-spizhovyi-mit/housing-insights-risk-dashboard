@@ -1,0 +1,38 @@
+[
+  {
+    "city": "Calgary",
+    "target": "price",
+    "points": 12,
+    "lastDate": "2026-08-01"
+  },
+  {
+    "city": "Calgary",
+    "target": "rent",
+    "points": 12,
+    "lastDate": "2026-08-01"
+  },
+  {
+    "city": "Toronto",
+    "target": "price",
+    "points": 12,
+    "lastDate": "2026-08-01"
+  },
+  {
+    "city": "Toronto",
+    "target": "rent",
+    "points": 12,
+    "lastDate": "2026-08-01"
+  },
+  {
+    "city": "Vancouver",
+    "target": "price",
+    "points": 12,
+    "lastDate": "2026-08-01"
+  },
+  {
+    "city": "Vancouver",
+    "target": "rent",
+    "points": 12,
+    "lastDate": "2026-08-01"
+  }
+]

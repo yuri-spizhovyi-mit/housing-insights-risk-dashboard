@@ -10,7 +10,7 @@ import RentComparisonChart from "./RentConparisonChart";
 function RentComparison() {
   const { city } = useFilters();
   const { modelsData, error, isFetching } = useModelComparison(city, "rent");
-  const memoizedData = useMemo(() => modelsData, [modelsData?.city]);
+  const memoizedData = useMemo(() => modelsData, [modelsData]);
 
   return (
     <Frame className="col-span-12 lg:col-span-8 opacity-100 flex flex-col">

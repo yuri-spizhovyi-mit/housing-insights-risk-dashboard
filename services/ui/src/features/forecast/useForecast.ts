@@ -6,8 +6,8 @@ import { getForecast, type ForecastTarget } from "../../services/dashboard";
 
 export function useForecast(filters: State, target: ForecastTarget) {
   const { data, error, isFetching } = useQuery<Forecast, ApiError>({
-    queryKey: [`forecast-${target}`],
-    queryFn: () => getForecast(filters, target),
+    queryKey: ["forecast", target, filters.city, filters.horizon, filters.modelType],
+    queryFn: ({ signal }) => getForecast(filters, target, signal),
   });
 
   return { forecast: data, error, isFetching };

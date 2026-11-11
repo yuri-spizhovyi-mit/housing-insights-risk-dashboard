@@ -8,7 +8,7 @@ import type { ForecastMetricsResponse } from "../types/model-comparison";
 
 export async function getCities(): Promise<string[]> {
   const res = await fetch(
-    "https://housing-insights-risk-dashboard.vercel.app/cities"
+    `${API_BASE}/cities`
   );
 
   if (!res.ok) {
@@ -19,9 +19,11 @@ export async function getCities(): Promise<string[]> {
   return data.cities;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://housing-insights-risk-dashboard.vercel.app";
+
 export type ForecastTarget = "price" | "rent";
 
-export async function getForecast(filters: State, target: ForecastTarget) {
+export async function getForecast(filters: State, target: ForecastTarget, signal?: AbortSignal) {
   const params = new URLSearchParams();
   params.append("city", filters.city);
   params.append("horizon", filters.horizon.toLowerCase());
@@ -31,7 +33,7 @@ export async function getForecast(filters: State, target: ForecastTarget) {
   let res: Response;
   try {
     res = await fetch(
-      `https://housing-insights-risk-dashboard.vercel.app/forecast?${params.toString()}&`
+      `${API_BASE}/forecast?${params.toString()}`, { signal }
     );
   } catch {
     throw new ApiError(
@@ -64,7 +66,7 @@ export async function getForecast(filters: State, target: ForecastTarget) {
 export async function getSentiments(city: string): Promise<CitySentiments> {
   try {
     const res = await fetch(
-      `https://housing-insights-risk-dashboard.vercel.app/sentiment?city=${city}`
+      `${API_BASE}/sentiment?city=${city}`
     );
 
     if (!res.ok) {
@@ -100,7 +102,7 @@ export async function getSentiments(city: string): Promise<CitySentiments> {
 export async function getRiskGauge(city: string): Promise<CityInsight> {
   try {
     const res = await fetch(
-      `https://housing-insights-risk-dashboard.vercel.app/risk?city=${city}`
+      `${API_BASE}/risk?city=${city}`
     );
 
     if (!res.ok) {
@@ -139,10 +141,10 @@ export async function getMarketAnomalies(
   try {
     const res = await Promise.all([
       fetch(
-        `https://housing-insights-risk-dashboard.vercel.app/anomalies?city=${city}&target=rent`
+        `${API_BASE}/anomalies?city=${city}&target=rent`
       ),
       fetch(
-        `https://housing-insights-risk-dashboard.vercel.app/anomalies?city=${city}&target=price`
+        `${API_BASE}/anomalies?city=${city}&target=price`
       ),
     ]);
 
@@ -155,7 +157,7 @@ export async function getMarketAnomalies(
       );
     }
 
-    if (!res.some((r) => r.ok)) {
+    if (res.some((r) => !r.ok)) {
       throw new ApiError(
         "error",
         "Something went wrong",
@@ -189,7 +191,7 @@ export async function getModelComparisons(
 ): Promise<ForecastMetricsResponse> {
   try {
     const res = await fetch(
-      `https://housing-insights-risk-dashboard.vercel.app/model-comparison?city=${city}&target=${target}`
+      `${API_BASE}/model-comparison?city=${city}&target=${target}`
     );
 
     if (res.status === 404) {
