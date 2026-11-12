@@ -17,3 +17,12 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run build
+  backend-startup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r services/fapi/requirements.txt pytest
+      - run: python -m pytest services/fapi/tests/test_startup.py services/fapi/tests/test_mvp.py -q
