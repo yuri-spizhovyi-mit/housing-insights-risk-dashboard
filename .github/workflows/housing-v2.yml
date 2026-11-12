@@ -25,4 +25,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r services/fapi/requirements.txt pytest
-      - run: python -m pytest services/fapi/tests/test_startup.py -q
+      - run: python -m pytest services/fapi/tests/test_startup.py services/fapi/tests/test_mvp.py -q

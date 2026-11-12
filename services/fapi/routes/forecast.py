@@ -45,22 +45,13 @@ def get_forecast(
         {
             "date": r.predict_date.isoformat(),
             "value": float(r.yhat),
-            "lower": float(r.yhat_lower) if r.yhat_lower else None,
-            "upper": float(r.yhat_upper) if r.yhat_upper else None,
+            "lower": float(r.yhat_lower) if r.yhat_lower is not None else None,
+            "upper": float(r.yhat_upper) if r.yhat_upper is not None else None,
         }
         for r in rows
     ]
 
-    # Sampling logic
-    if months == 12:
-        sampled = full
-    elif months == 24:
-        sampled = full[::2]  # 12 points
-    elif months >= 60:
-        step = max(1, len(full) // 12)
-        sampled = full[::step][:12]
-    else:
-        sampled = full
+    sampled = full
 
     return {
         "city": city,
